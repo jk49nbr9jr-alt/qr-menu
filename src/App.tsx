@@ -257,7 +257,7 @@ function AdminApp() {
         alert("Fehler beim Speichern: " + t);
         return;
       }
-      alert("Gespeichert. Die Seite wird in Kürze automatisch neu deployed.");
+      alert("Gespeichert.");
     } catch (e:any) {
       alert("Netzwerkfehler: " + e.message);
     }
@@ -306,7 +306,7 @@ function AdminApp() {
         <div className="border-t">
           <div className="max-w-5xl mx-auto p-3 flex flex-wrap items-center gap-2">
             <PrimaryBtn onClick={addItem}>+ Neuer Artikel</PrimaryBtn>
-            <Button onClick={saveToRepo}>Speichern (Deploy)</Button>
+            <Button onClick={saveToRepo}>Speichern </Button>
             <Button onClick={() => {
               const blob = new Blob([JSON.stringify(menu ?? [], null, 2)], { type: "application/json" });
               const url = URL.createObjectURL(blob);
