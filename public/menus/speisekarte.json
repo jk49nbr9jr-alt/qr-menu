@@ -1,5 +1,13 @@
 [
   {
+    "id": "ydu1mn6",
+    "name": "Pizza Salami",
+    "desc": "Knuspriger Boden, Tomatensauce, Mozzarella und reichlich italienische Salami.",
+    "price": 10.9,
+    "img": "https://plus.unsplash.com/premium_photo-1668771085141-82507d6154d5?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=1287",
+    "category": "Pizza"
+  },
+  {
     "id": "617x9lb",
     "name": "Margherita",
     "desc": "Klassiker mit frischem Mozzarella, Basilikum und Tomatensauce.",
