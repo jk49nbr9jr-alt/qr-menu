@@ -1,0 +1,14 @@
+{
+	auto_https off
+}
+
+:80 {
+	root * /Users/canyuksel/Urixsoft/qr-menu/dist
+	encode gzip
+	file_server
+
+	@notFile {
+		not file
+	}
+	rewrite @notFile /index.html
+}
