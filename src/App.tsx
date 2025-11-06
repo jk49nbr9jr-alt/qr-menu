@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
 /* ---------- kleine UI-Helpers (Tailwind) ---------- */
 type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & { className?: string };
@@ -210,6 +210,44 @@ function AdminApp() {
   const [authed, setAuthed] = useState<boolean>(typeof window !== 'undefined' && sessionStorage.getItem(ADMIN_TOKEN_KEY) === '1');
   const [password, setPassword] = useState("");
 
+  // --- Autosave Setup ---
+  const ADMIN_SECRET = (import.meta as any).env.VITE_ADMIN_SECRET || "";
+  const TENANT = getTenantKey();
+
+  const savingRef = useRef(false);
+  const timerRef = useRef<number | null>(null);
+  const itemsRef = useRef<MenuItem[] | null>(menu);
+  useEffect(() => { itemsRef.current = menu; }, [menu]);
+
+  async function persistNow(payload: MenuItem[] | null) {
+    if (!payload) return;
+    try {
+      savingRef.current = true;
+      const r = await fetch("/api/save-menu", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-secret": ADMIN_SECRET,
+        },
+        body: JSON.stringify({ tenant: TENANT, items: payload })
+      });
+      if (!r.ok) {
+        console.error("Autosave fehlgeschlagen:", await r.text());
+      }
+    } catch (e) {
+      console.error("Autosave Error", e);
+    } finally {
+      savingRef.current = false;
+    }
+  }
+
+  function scheduleAutosave() {
+    if (timerRef.current) window.clearTimeout(timerRef.current);
+    timerRef.current = window.setTimeout(() => {
+      if (!savingRef.current) persistNow(itemsRef.current);
+    }, 1500);
+  }
+
   useEffect(() => { document.title = BRAND_TITLE + " – Admin"; }, []);
   useEffect(() => {
     const tenant = getTenantKey();
@@ -229,6 +267,7 @@ function AdminApp() {
     if (!menu) return;
     if (!confirm("Artikel wirklich löschen?")) return;
     setMenu(menu.filter(i => i.id !== id));
+    scheduleAutosave();
   }
   function upsertItem(next: MenuItem) {
     setMenu(prev => {
@@ -237,31 +276,9 @@ function AdminApp() {
       return exists ? list.map(i => (i.id === next.id ? next : i)) : [next, ...list];
     });
     setEditorOpen(false);
+    scheduleAutosave();
   }
 
-  // Speichern ins Repo via Vercel Function
-  async function saveToRepo() {
-    if (!menu) return;
-    const tenant = getTenantKey();
-    try {
-      const r = await fetch("/api/save-menu", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-admin-secret": (import.meta as any).env.VITE_ADMIN_SECRET || "",
-        },
-        body: JSON.stringify({ tenant, items: menu })
-      });
-      if (!r.ok) {
-        const t = await r.text();
-        alert("Fehler beim Speichern: " + t);
-        return;
-      }
-      alert("Gespeichert.");
-    } catch (e:any) {
-      alert("Netzwerkfehler: " + e.message);
-    }
-  }
 
   function login(e: React.FormEvent) {
     e.preventDefault();
@@ -306,7 +323,7 @@ function AdminApp() {
         <div className="border-t">
           <div className="max-w-5xl mx-auto p-3 flex flex-wrap items-center gap-2">
             <PrimaryBtn onClick={addItem}>+ Neuer Artikel</PrimaryBtn>
-            <Button onClick={saveToRepo}>Speichern </Button>
+            {/* 
             <Button onClick={() => {
               const blob = new Blob([JSON.stringify(menu ?? [], null, 2)], { type: "application/json" });
               const url = URL.createObjectURL(blob);
@@ -330,7 +347,8 @@ function AdminApp() {
               }} />
               <span className="inline-flex items-center rounded-md border border-neutral-300 px-3 py-2 text-sm">Import JSON</span>
             </label>
-            <span className="text-xs text-neutral-500">Speichern schreibt die JSON ins Repo (Vercel deployt automatisch).</span>
+            */}
+            <span className="text-xs text-neutral-500">Änderungen werden automatisch gespeichert und deployt.</span>
           </div>
         </div>
       </header>
