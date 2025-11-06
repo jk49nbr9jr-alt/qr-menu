@@ -1,24 +1,41 @@
-import QRCode from 'qrcode'
-import fs from 'node:fs'
-import path from 'node:path'
+// make-qr.mjs
+import fs from "fs";
+import path from "path";
+import QRCode from "qrcode";
 
+const args = process.argv.slice(2);
+const url = args[0] || "https://speisekarte.urixsoft.de/";
+const label = args[1] || "Speisekarte Urixsoft";
 
-const url = process.argv[2] || 'http://speisekarte.urixsoft/'; // ODER https://speisekarte.urixsoft.de/
-const BRAND = process.argv[3] || 'Speisekarte Urixsoft';
+// Ausgabeverzeichnis festlegen
+const outDir = path.resolve("public");
 
-// falls public-Ordner nicht existiert → anlegen
-fs.mkdirSync(outDir, { recursive: true })
+// Sicherstellen, dass es existiert
+fs.mkdirSync(outDir, { recursive: true });
 
-const pngPath = path.join(outDir, 'qr-speisekarte.png')
-const svgPath = path.join(outDir, 'qr-speisekarte.svg')
+// Dateien definieren
+const pngFile = path.join(outDir, "qr-speisekarte.png");
+const svgFile = path.join(outDir, "qr-speisekarte.svg");
 
-try {
-  await QRCode.toFile(pngPath, url, { width: 1024, margin: 2 })
-  await QRCode.toFile(svgPath, url, { type: 'svg', margin: 1 })
-  console.log('✅ QR-Code erfolgreich erstellt!')
-  console.log('📁 Dateien gespeichert unter:')
-  console.log('   ', pngPath)
-  console.log('   ', svgPath)
-} catch (err) {
-  console.error('❌ Fehler beim Erstellen des QR-Codes:', err)
-}
+console.log(`🔗 Erstelle QR-Code für: ${url}`);
+
+// SVG erzeugen
+const svg = await QRCode.toString(url, {
+  type: "svg",
+  color: { dark: "#000000", light: "#FFFFFF" },
+  margin: 1,
+});
+fs.writeFileSync(svgFile, svg, "utf8");
+
+// PNG erzeugen
+await QRCode.toFile(pngFile, url, {
+  color: { dark: "#000000", light: "#FFFFFF" },
+  width: 512,
+  margin: 1,
+});
+
+console.log("✅ QR-Code erfolgreich erstellt!");
+console.log("📁 Dateien gespeichert unter:");
+console.log("   ", pngFile);
+console.log("   ", svgFile);
+console.log(`🏷️  Label: ${label}`);
