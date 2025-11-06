@@ -1,18 +1,18 @@
 [
   {
-    "id": "4v81o5j",
-    "name": "Classic Burger",
-    "desc": "",
-    "price": 10.9,
-    "img": "https://images.unsplash.com/photo-1550547660-d9450f859349",
+    "id": "cmnszdv",
+    "name": "Vegan Burger",
+    "desc": "Pflanzlicher Patty mit Avocado, Rucola, veganer Mayo und Tomaten-Chutney.",
+    "price": 11.9,
+    "img": "https://images.unsplash.com/photo-1520072959219-c595dc870360?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=3090",
     "category": "Burger"
   },
   {
     "id": "kbfxq6j",
-    "name": "Test",
-    "desc": "test",
-    "price": 9,
-    "img": "test",
+    "name": "Classic Burger",
+    "desc": "Saftiges Rindfleisch-Patty, Cheddar, Tomate, Zwiebeln und unsere Haus-Sauce im Brioche-Bun.",
+    "price": 10.9,
+    "img": "https://images.unsplash.com/photo-1550547660-d9450f859349",
     "category": "Burger"
   }
 ]
