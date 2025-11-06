@@ -2,14 +2,14 @@
 export const config = { runtime: "edge" };
 
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN!;
-const OWNER = process.env.GITHUB_OWNER!;     // z.B. "jk49nbr9jr-alt"
-const REPO = process.env.GITHUB_REPO!;       // "qr-menu"
+const OWNER = process.env.GITHUB_OWNER!;
+const REPO = process.env.GITHUB_REPO!;
 const BRANCH = process.env.GITHUB_BRANCH || "main";
 const ADMIN_SECRET = process.env.ADMIN_SECRET!;
 
 async function getSha(path: string) {
-  const u = `https://api.github.com/repos/${OWNER}/${REPO}/contents/${encodeURIComponent(path)}?ref=${BRANCH}`;
-  const r = await fetch(u, { headers: { Authorization: `Bearer ${GITHUB_TOKEN}`, "User-Agent": "qr-menu" }});
+  const url = `https://api.github.com/repos/${OWNER}/${REPO}/contents/${encodeURIComponent(path)}?ref=${BRANCH}`;
+  const r = await fetch(url, { headers: { Authorization: `Bearer ${GITHUB_TOKEN}`, "User-Agent": "qr-menu" }});
   if (r.status === 200) { const j:any = await r.json(); return j.sha as string; }
   return undefined;
 }
