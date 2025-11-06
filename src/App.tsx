@@ -396,7 +396,12 @@ function AdminApp() {
 
 /* ---------- sehr einfacher Router: /admin -> AdminApp, sonst Public ---------- */
 export default function App() {
-  const path = typeof window !== 'undefined' ? window.location.pathname : '/';
-  if (path.startsWith('/admin')) return <AdminApp />;
+  // Hash-Routing: /#/admin statt /admin
+  const path =
+    typeof window !== "undefined"
+      ? (window.location.hash?.slice(1) || "/")
+      : "/";
+
+  if (path.startsWith("/admin")) return <AdminApp />;
   return <PublicApp />;
 }
