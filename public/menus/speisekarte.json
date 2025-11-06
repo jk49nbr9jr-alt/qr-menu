@@ -1,10 +1,10 @@
 [
   {
     "id": "kbfxq6j",
-    "name": "Test",
-    "desc": "test",
-    "price": 9,
-    "img": "test",
+    "name": "Classic Burger",
+    "desc": "Saftiges Rindfleisch-Patty, Cheddar, Tomate, Zwiebeln und unsere Haus-Sauce im Brioche-Bun.",
+    "price": 10.9,
+    "img": "https://images.unsplash.com/photo-1550547660-d9450f859349",
     "category": "Burger"
   }
 ]
