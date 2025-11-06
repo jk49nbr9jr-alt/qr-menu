@@ -225,7 +225,6 @@ function AdminApp() {
   }, [menu, cat, search]);
 
   function addItem() { setEditTarget(null); setEditorOpen(true); }
-  function editItem(it: MenuItem) { setEditTarget(it); setEditorOpen(true); }
   function deleteItem(id: string) {
     if (!menu) return;
     if (!confirm("Artikel wirklich löschen?")) return;
@@ -361,7 +360,7 @@ function AdminApp() {
                     <div className="flex items-center justify-between">
                       <div className="font-semibold">€ {item.price.toFixed(2)}</div>
                       <div className="flex items-center gap-2">
-                        <Button onClick={() => setEditTarget(item)}>Bearbeiten</Button>
+                        <Button onClick={() => { setEditTarget(item); setEditorOpen(true); }}>Bearbeiten</Button>
                         <Button onClick={() => deleteItem(item.id)}>Löschen</Button>
                       </div>
                     </div>
