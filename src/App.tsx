@@ -74,15 +74,19 @@ async function fetchMenu(tenant: string): Promise<MenuItem[]> {
 type EditorProps = {
   open: boolean;
   item: MenuItem | null;
+  menu: MenuItem[] | null;
   onClose: () => void;
   onSave: (next: MenuItem) => void;
 };
-const Editor: React.FC<EditorProps> = ({ open, item, onClose, onSave }) => {
+const Editor: React.FC<EditorProps> = ({ open, item, menu, onClose, onSave }) => {
   const [draft, setDraft] = useState<MenuItem>(item || { id: Math.random().toString(36).slice(2,9), name: "", desc: "", price: 0, img: "", category: "Burger" });
 
   useEffect(() => {
     setDraft(item || { id: Math.random().toString(36).slice(2,9), name: "", desc: "", price: 0, img: "", category: "Burger" });
   }, [item, open]);
+
+  const existingCats = useMemo(() => Array.from(new Set((menu ?? []).map(i => i.category))), [menu]);
+  const NEW = "__NEW_CATEGORY__";
 
   if (!open) return null;
   return (
@@ -129,7 +133,33 @@ const Editor: React.FC<EditorProps> = ({ open, item, onClose, onSave }) => {
           </label>
           <label className="text-sm">
             <div>Kategorie</div>
-            <Input placeholder="z. B. Burger, Pizza, Drinks" value={draft.category} onChange={e => setDraft({ ...draft, category: e.target.value })} />
+            <select
+              className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black/10"
+              value={existingCats.includes(draft.category) ? draft.category : NEW}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v === NEW) {
+                  // Umschalten auf Eingabe einer neuen Kategorie
+                  setDraft({ ...draft, category: "" });
+                } else {
+                  setDraft({ ...draft, category: v });
+                }
+              }}
+            >
+              {existingCats.map((cat) => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+              <option value={NEW}>+ Neue Kategorie hinzufügen</option>
+            </select>
+            {!existingCats.includes(draft.category) && (
+              <div className="mt-2">
+                <Input
+                  placeholder="Neue Kategorie eingeben"
+                  value={draft.category}
+                  onChange={(e) => setDraft({ ...draft, category: e.target.value })}
+                />
+              </div>
+            )}
           </label>
 
           {draft.img ? (
@@ -419,6 +449,7 @@ function AdminApp() {
       <Editor
         open={editorOpen}
         item={editTarget}
+        menu={menu}
         onClose={() => setEditorOpen(false)}
         onSave={(draft) => {
           if (!draft.id) draft.id = Math.random().toString(36).slice(2,9);
