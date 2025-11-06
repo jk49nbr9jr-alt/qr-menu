@@ -46,35 +46,28 @@ type MenuItem = {
   category: string;
 };
 
-const DEFAULT_MENU: MenuItem[] = [
-  { id: "1", name: "Classic Burger", desc: "Rindfleisch-Patty, Cheddar, Tomate, Haus-Sauce", price: 10.9, img: "https://images.unsplash.com/photo-1550317138-10000687a72b?q=80&w=1200&auto=format&fit=crop", category: "Burger" },
-  { id: "2", name: "Vegan Burger", desc: "Erbsen-Patty, Avocado, Rucola, vegane Mayo", price: 11.9, img: "https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?q=80&w=1200&auto=format&fit=crop", category: "Burger" },
-  { id: "3", name: "Margherita", desc: "San Marzano, Fior di Latte, Basilikum", price: 9.5, img: "https://images.unsplash.com/photo-1702716059239-385baacdabdc?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=1287", category: "Pizza" },
-  { id: "4", name: "Espresso", desc: "Single Shot", price: 2.2, img: "https://images.unsplash.com/photo-1470337458703-46ad1756a187?q=80&w=1200&auto=format&fit=crop", category: "Drinks" },
-];
-
-const STORAGE_KEY = "qrmenu.menu.v1";
 const BRAND_TITLE = "Speisekarte Urixsoft";
 const ADMIN_TOKEN_KEY = "qrmenu.admin.token";
-const ADMIN_PASSWORD = "admin123"; // TODO: später über .env oder Backend lösen
+const ADMIN_PASSWORD = "admin123"; // Demo-Passwort – später ersetzen
 
-/* ---------- Hilfsfunktionen ---------- */
-function loadMenu(): MenuItem[] {
+/* ---------- Tenant-Helfer ---------- */
+function getTenantKey() {
+  const host = typeof window !== "undefined" ? window.location.hostname : "";
+  const first = host.split(".")[0] || "speisekarte";
+  if (first === "www" || first.includes("vercel")) return "speisekarte";
+  return first;
+}
+
+/* ---------- Public: Menü aus JSON laden ---------- */
+async function fetchMenu(tenant: string): Promise<MenuItem[]> {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return DEFAULT_MENU;
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return DEFAULT_MENU;
-    return parsed;
+    const res = await fetch(`/menus/${tenant}.json`, { cache: "no-store" });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
   } catch {
-    return DEFAULT_MENU;
+    return [];
   }
-}
-function saveMenu(items: MenuItem[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-}
-function uid() {
-  return Math.random().toString(36).slice(2, 9);
 }
 
 /* ---------- Admin Editor ---------- */
@@ -85,10 +78,10 @@ type EditorProps = {
   onSave: (next: MenuItem) => void;
 };
 const Editor: React.FC<EditorProps> = ({ open, item, onClose, onSave }) => {
-  const [draft, setDraft] = useState<MenuItem>(item || { id: uid(), name: "", desc: "", price: 0, img: "", category: "Burger" });
+  const [draft, setDraft] = useState<MenuItem>(item || { id: Math.random().toString(36).slice(2,9), name: "", desc: "", price: 0, img: "", category: "Burger" });
 
   useEffect(() => {
-    setDraft(item || { id: uid(), name: "", desc: "", price: 0, img: "", category: "Burger" });
+    setDraft(item || { id: Math.random().toString(36).slice(2,9), name: "", desc: "", price: 0, img: "", category: "Burger" });
   }, [item, open]);
 
   if (!open) return null;
@@ -137,15 +130,19 @@ const Editor: React.FC<EditorProps> = ({ open, item, onClose, onSave }) => {
 
 /* ---------- Öffentliche Ansicht (ohne Admin-UI) ---------- */
 function PublicApp() {
-  const [menu] = useState<MenuItem[]>(loadMenu());
+  const [menu, setMenu] = useState<MenuItem[] | null>(null);
   const [cat, setCat] = useState("Alle");
   const [search, setSearch] = useState("");
 
   useEffect(() => { document.title = BRAND_TITLE; }, []);
+  useEffect(() => {
+    const tenant = getTenantKey();
+    fetchMenu(tenant).then(setMenu);
+  }, []);
 
-  const categories = useMemo(() => ["Alle", ...Array.from(new Set(menu.map(i => i.category)))], [menu]);
+  const categories = useMemo(() => ["Alle", ...Array.from(new Set((menu ?? []).map(i => i.category)))], [menu]);
   const filtered = useMemo(() => {
-    let items = menu;
+    let items = menu ?? [];
     if (cat !== "Alle") items = items.filter(i => i.category === cat);
     if (search.trim()) items = items.filter(i => i.name.toLowerCase().includes(search.toLowerCase()));
     return items;
@@ -163,32 +160,41 @@ function PublicApp() {
       </header>
 
       <main className="max-w-5xl mx-auto p-4">
-        <div className="flex gap-2 mb-4 flex-wrap">
-          {categories.map((c) => (
-            <Button key={c} onClick={() => setCat(c)} className={cat === c ? "bg-black text-white" : ""}>
-              {c}
-            </Button>
-          ))}
-        </div>
+        {!menu ? (
+          <div className="p-4 text-sm text-neutral-500">Lade Menü…</div>
+        ) : (
+          <>
+            <div className="flex gap-2 mb-4 flex-wrap">
+              {categories.map((c) => (
+                <Button key={c} onClick={() => setCat(c)} className={cat === c ? "bg-black text-white" : ""}>
+                  {c}
+                </Button>
+              ))}
+            </div>
 
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {filtered.map((item) => (
-            <Card key={item.id}>
-              <img src={item.img} alt={item.name} className="w-full h-40 object-cover rounded-t-xl" />
-              <CardHeader>
-                <CardTitle>{item.name}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-neutral-600 mb-2">{item.desc}</p>
-                <div className="font-semibold">€ {item.price.toFixed(2)}</div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              {filtered.map((item) => (
+                <Card key={item.id}>
+                  <img src={item.img} alt={item.name} className="w-full h-40 object-cover rounded-t-xl" />
+                  <CardHeader>
+                    <CardTitle>{item.name}</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-neutral-600 mb-2">{item.desc}</p>
+                    <div className="font-semibold">€ {item.price.toFixed(2)}</div>
+                  </CardContent>
+                </Card>
+              ))}
+              {filtered.length === 0 && (
+                <div className="text-sm text-neutral-500">Keine Artikel gefunden.</div>
+              )}
+            </div>
+          </>
+        )}
       </main>
 
       <footer className="text-center py-4 text-sm text-neutral-500 border-t mt-6">
-        © {new Date().getFullYear()} QR-Speisekarte Urixsof
+        © {new Date().getFullYear()} QR-Speisekarte Urixsoft
       </footer>
     </div>
   );
@@ -196,7 +202,7 @@ function PublicApp() {
 
 /* ---------- Admin-Bereich unter /admin ---------- */
 function AdminApp() {
-  const [menu, setMenu] = useState<MenuItem[]>(loadMenu());
+  const [menu, setMenu] = useState<MenuItem[] | null>(null);
   const [cat, setCat] = useState("Alle");
   const [search, setSearch] = useState("");
   const [editorOpen, setEditorOpen] = useState(false);
@@ -205,11 +211,14 @@ function AdminApp() {
   const [password, setPassword] = useState("");
 
   useEffect(() => { document.title = BRAND_TITLE + " – Admin"; }, []);
-  useEffect(() => { saveMenu(menu); }, [menu]);
+  useEffect(() => {
+    const tenant = getTenantKey();
+    fetchMenu(tenant).then(setMenu);
+  }, []);
 
-  const categories = useMemo(() => ["Alle", ...Array.from(new Set(menu.map(i => i.category)))], [menu]);
+  const categories = useMemo(() => ["Alle", ...Array.from(new Set((menu ?? []).map(i => i.category)))], [menu]);
   const filtered = useMemo(() => {
-    let items = menu;
+    let items = menu ?? [];
     if (cat !== "Alle") items = items.filter(i => i.category === cat);
     if (search.trim()) items = items.filter(i => i.name.toLowerCase().includes(search.toLowerCase()));
     return items;
@@ -217,38 +226,42 @@ function AdminApp() {
 
   function addItem() { setEditTarget(null); setEditorOpen(true); }
   function editItem(it: MenuItem) { setEditTarget(it); setEditorOpen(true); }
-  function deleteItem(id: string) { if (!confirm("Artikel wirklich löschen?")) return; setMenu(prev => prev.filter(i => i.id !== id)); }
+  function deleteItem(id: string) {
+    if (!menu) return;
+    if (!confirm("Artikel wirklich löschen?")) return;
+    setMenu(menu.filter(i => i.id !== id));
+  }
   function upsertItem(next: MenuItem) {
     setMenu(prev => {
-      const exists = prev.some(i => i.id === next.id);
-      return exists ? prev.map(i => (i.id === next.id ? next : i)) : [next, ...prev];
+      const list = prev ?? [];
+      const exists = list.some(i => i.id === next.id);
+      return exists ? list.map(i => (i.id === next.id ? next : i)) : [next, ...list];
     });
     setEditorOpen(false);
   }
 
-  function exportJson() {
-    const blob = new Blob([JSON.stringify(menu, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = "menu-export.json"; a.click(); URL.revokeObjectURL(url);
-  }
-  function importJson(ev: React.ChangeEvent<HTMLInputElement>) {
-    const file = ev.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const parsed = JSON.parse(String(reader.result));
-        if (!Array.isArray(parsed)) throw new Error("Format ungültig");
-        setMenu(parsed);
-        alert("Import erfolgreich.");
-      } catch (e: any) {
-        alert("Konnte Datei nicht importieren: " + e.message);
-      } finally {
-        ev.target.value = "";
+  // Speichern ins Repo via Vercel Function
+  async function saveToRepo() {
+    if (!menu) return;
+    const tenant = getTenantKey();
+    try {
+      const r = await fetch("/api/save-menu", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-secret": (import.meta as any).env.VITE_ADMIN_SECRET || "",
+        },
+        body: JSON.stringify({ tenant, items: menu })
+      });
+      if (!r.ok) {
+        const t = await r.text();
+        alert("Fehler beim Speichern: " + t);
+        return;
       }
-    };
-    reader.readAsText(file);
+      alert("Gespeichert. Die Seite wird in Kürze automatisch neu deployed.");
+    } catch (e:any) {
+      alert("Netzwerkfehler: " + e.message);
+    }
   }
 
   function login(e: React.FormEvent) {
@@ -294,52 +307,89 @@ function AdminApp() {
         <div className="border-t">
           <div className="max-w-5xl mx-auto p-3 flex flex-wrap items-center gap-2">
             <PrimaryBtn onClick={addItem}>+ Neuer Artikel</PrimaryBtn>
-            <Button onClick={exportJson}>Export JSON</Button>
+            <Button onClick={saveToRepo}>Speichern (Deploy)</Button>
+            <Button onClick={() => {
+              const blob = new Blob([JSON.stringify(menu ?? [], null, 2)], { type: "application/json" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url; a.download = "menu-export.json"; a.click(); URL.revokeObjectURL(url);
+            }}>Export JSON</Button>
             <label className="inline-flex items-center gap-2 cursor-pointer">
-              <input type="file" accept="application/json" className="hidden" onChange={importJson} />
+              <input type="file" accept="application/json" className="hidden" onChange={(ev) => {
+                const file = ev.target.files?.[0];
+                if (!file) return; const reader = new FileReader();
+                reader.onload = () => {
+                  try {
+                    const parsed = JSON.parse(String(reader.result));
+                    if (!Array.isArray(parsed)) throw new Error("Format ungültig");
+                    setMenu(parsed);
+                    alert("Import erfolgreich. Nicht vergessen: Speichern (Deploy) klicken.");
+                  } catch (e:any) { alert("Konnte Datei nicht importieren: " + e.message); }
+                  finally { ev.target.value = ""; }
+                };
+                reader.readAsText(file);
+              }} />
               <span className="inline-flex items-center rounded-md border border-neutral-300 px-3 py-2 text-sm">Import JSON</span>
             </label>
-            <span className="text-xs text-neutral-500">Änderungen werden automatisch lokal gespeichert.</span>
+            <span className="text-xs text-neutral-500">Speichern schreibt die JSON ins Repo (Vercel deployt automatisch).</span>
           </div>
         </div>
       </header>
 
       <main className="max-w-5xl mx-auto p-4">
-        <div className="flex gap-2 mb-4 flex-wrap">
-          {categories.map((c) => (
-            <Button key={c} onClick={() => setCat(c)} className={cat === c ? "bg-black text-white" : ""}>
-              {c}
-            </Button>
-          ))}
-        </div>
+        {!menu ? (
+          <div className="p-4 text-sm text-neutral-500">Lade Menü…</div>
+        ) : (
+          <>
+            <div className="flex gap-2 mb-4 flex-wrap">
+              {categories.map((c) => (
+                <Button key={c} onClick={() => setCat(c)} className={cat === c ? "bg-black text-white" : ""}>
+                  {c}
+                </Button>
+              ))}
+            </div>
 
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {filtered.map((item) => (
-            <Card key={item.id}>
-              <img src={item.img} alt={item.name} className="w-full h-40 object-cover rounded-t-xl" />
-              <CardHeader>
-                <CardTitle>{item.name}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-neutral-600 mb-2">{item.desc}</p>
-                <div className="flex items-center justify-between">
-                  <div className="font-semibold">€ {item.price.toFixed(2)}</div>
-                  <div className="flex items-center gap-2">
-                    <Button onClick={() => editItem(item)}>Bearbeiten</Button>
-                    <Button onClick={() => deleteItem(item.id)}>Löschen</Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              {filtered.map((item) => (
+                <Card key={item.id}>
+                  <img src={item.img} alt={item.name} className="w-full h-40 object-cover rounded-t-xl" />
+                  <CardHeader>
+                    <CardTitle>{item.name}</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-neutral-600 mb-2">{item.desc}</p>
+                    <div className="flex items-center justify-between">
+                      <div className="font-semibold">€ {item.price.toFixed(2)}</div>
+                      <div className="flex items-center gap-2">
+                        <Button onClick={() => setEditTarget(item)}>Bearbeiten</Button>
+                        <Button onClick={() => deleteItem(item.id)}>Löschen</Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+              {filtered.length === 0 && (
+                <div className="text-sm text-neutral-500">Noch keine Artikel. Mit “+ Neuer Artikel” beginnen.</div>
+              )}
+            </div>
+          </>
+        )}
       </main>
 
       <footer className="text-center py-4 text-sm text-neutral-500 border-t mt-6">
         © {new Date().getFullYear()} QR-Speisekarte Urixsoft
       </footer>
 
-      <Editor open={editorOpen} item={editTarget} onClose={() => setEditorOpen(false)} onSave={upsertItem} />
+      {/* Editor */}
+      <Editor
+        open={editorOpen}
+        item={editTarget}
+        onClose={() => setEditorOpen(false)}
+        onSave={(draft) => {
+          if (!draft.id) draft.id = Math.random().toString(36).slice(2,9);
+          upsertItem(draft);
+        }}
+      />
     </div>
   );
 }

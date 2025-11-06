@@ -1,0 +1,26 @@
+[
+  {
+    "id": "1",
+    "name": "Classic Burger",
+    "desc": "Rindfleisch-Patty, Cheddar, Tomate, Haus-Sauce",
+    "price": 10.9,
+    "img": "https://images.unsplash.com/photo-1550317138-10000687a72b?q=80&w=1200&auto=format&fit=crop",
+    "category": "Burger"
+  },
+  {
+    "id": "2",
+    "name": "Margherita",
+    "desc": "San Marzano, Fior di Latte, Basilikum",
+    "price": 9.5,
+    "img": "https://images.unsplash.com/photo-1601924582971-b9c62c7f1a3b?q=80&w=1200&auto=format&fit=crop",
+    "category": "Pizza"
+  },
+  {
+    "id": "3",
+    "name": "Espresso",
+    "desc": "Single Shot",
+    "price": 2.2,
+    "img": "https://images.unsplash.com/photo-1470337458703-46ad1756a187?q=80&w=1200&auto=format&fit=crop",
+    "category": "Drinks"
+  }
+]
