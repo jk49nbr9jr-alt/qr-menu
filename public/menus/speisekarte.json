@@ -1,5 +1,13 @@
 [
   {
+    "id": "e63bp93",
+    "name": "Espresso",
+    "desc": "Starker, aromatischer Espresso – perfekt nach dem Essen.",
+    "price": 2.2,
+    "img": "https://images.unsplash.com/photo-1611691934391-5a8805e0bd1a?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=1760",
+    "category": "Getränke (Warm)"
+  },
+  {
     "id": "ydu1mn6",
     "name": "Pizza Salami",
     "desc": "Knuspriger Boden, Tomatensauce, Mozzarella und reichlich italienische Salami.",
