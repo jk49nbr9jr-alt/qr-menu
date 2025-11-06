@@ -110,6 +110,24 @@ const Editor: React.FC<EditorProps> = ({ open, item, onClose, onSave }) => {
             <Input value={draft.img} onChange={e => setDraft({ ...draft, img: e.target.value })} />
           </label>
           <label className="text-sm">
+            <div>Eigenes Bild hochladen</div>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = () => {
+                  // Speichere Base64-DataURL direkt ins img-Feld
+                  setDraft({ ...draft, img: String(reader.result) });
+                };
+                reader.readAsDataURL(file);
+              }}
+            />
+            <div className="text-xs text-neutral-500 mt-1">Tipp: Du kannst entweder eine Bild-URL angeben oder eine Datei auswählen. Beim Upload wird das Bild als Base64 gespeichert.</div>
+          </label>
+          <label className="text-sm">
             <div>Kategorie</div>
             <Input placeholder="z. B. Burger, Pizza, Drinks" value={draft.category} onChange={e => setDraft({ ...draft, category: e.target.value })} />
           </label>
@@ -348,7 +366,7 @@ function AdminApp() {
               <span className="inline-flex items-center rounded-md border border-neutral-300 px-3 py-2 text-sm">Import JSON</span>
             </label>
             */}
-            <span className="text-xs text-neutral-500">Änderungen werden automatisch gespeichert und deployt.</span>
+            <span className="text-xs text-neutral-500">Änderungen werden automatisch gespeichert.</span>
           </div>
         </div>
       </header>
