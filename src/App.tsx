@@ -183,6 +183,7 @@ function PublicApp() {
   const [search, setSearch] = useState("");
   const [filterOn, setFilterOn] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const catRef = useRef<HTMLDivElement | null>(null);
 
   // Helper: center active category in scroll view
@@ -226,11 +227,21 @@ function PublicApp() {
       <header className="sticky top-0 bg-white border-b">
         <div className="max-w-5xl mx-auto flex justify-between items-center p-4">
           <h1 className="text-xl font-bold">{BRAND_TITLE}</h1>
-          <div className="flex items-center gap-2">
-            <Input placeholder="Suche im Menü..." value={search} onChange={(e) => setSearch(e.target.value)} />
-          </div>
+          <div className="flex items-center gap-2" />
         </div>
       </header>
+      {searchOpen && (
+        <div className="border-b bg-white">
+          <div className="max-w-5xl mx-auto p-3">
+            <Input
+              autoFocus
+              placeholder="Suche im Menü..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+        </div>
+      )}
 
       <main className="max-w-5xl mx-auto p-4">
         {!menu ? (
@@ -238,8 +249,16 @@ function PublicApp() {
         ) : (
           <>
             {/* Kategorien-Toolbar mit Scroll und Menü */}
-            <div className="mb-4 -mx-4 px-4">
+            <div className="mb-4 -mx-4 px-4 sticky top-[56px] z-30 bg-white/95 backdrop-blur">
               <div className="flex items-center gap-3">
+                {/* Suche öffnen */}
+                <button
+                  aria-label="Suche"
+                  className="inline-flex items-center justify-center rounded-full w-10 h-10 border border-neutral-300 text-neutral-500 bg-transparent hover:text-neutral-700 hover:border-neutral-400"
+                  onClick={() => setSearchOpen((v) => !v)}
+                >
+                  🔍
+                </button>
                 {/* Hamburger zum Öffnen der Liste */}
                 <button
                   aria-label="Kategorien"
@@ -355,6 +374,7 @@ function AdminApp() {
   const [password, setPassword] = useState("");
   // --- Toolbar/Category Scroll State ---
   const [navOpen, setNavOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const catRef = useRef<HTMLDivElement | null>(null);
   function centerActiveCatAdmin() {
     const el = catRef.current?.querySelector<HTMLButtonElement>(`[data-cat="${CSS.escape(cat)}"]`);
@@ -514,7 +534,6 @@ function AdminApp() {
         <div className="max-w-5xl mx-auto flex justify-between items-center p-4">
           <h1 className="text-xl font-bold">{BRAND_TITLE} – Admin</h1>
           <div className="flex items-center gap-2">
-            <Input placeholder="Suche im Menü..." value={search} onChange={(e) => setSearch(e.target.value)} />
             <Button onClick={logout}>Logout</Button>
           </div>
         </div>
@@ -550,6 +569,18 @@ function AdminApp() {
           </div>
         </div>
       </header>
+      {searchOpen && (
+        <div className="border-b bg-white">
+          <div className="max-w-5xl mx-auto p-3">
+            <Input
+              autoFocus
+              placeholder="Suche im Menü..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+        </div>
+      )}
 
       <main className="max-w-5xl mx-auto p-4">
         {!menu ? (
@@ -557,8 +588,16 @@ function AdminApp() {
         ) : (
           <>
             {/* Kategorien-Toolbar (Admin) */}
-            <div className="mb-4 -mx-4 px-4">
+            <div className="mb-4 -mx-4 px-4 sticky top-[56px] z-30 bg-white/95 backdrop-blur">
               <div className="flex items-center gap-3">
+                {/* Suche öffnen */}
+                <button
+                  aria-label="Suche"
+                  className="inline-flex items-center justify-center rounded-full w-10 h-10 border border-neutral-300 text-neutral-500 bg-transparent hover:text-neutral-700 hover:border-neutral-400"
+                  onClick={() => setSearchOpen((v) => !v)}
+                >
+                  🔍
+                </button>
                 {/* Hamburger */}
                 <button
                   aria-label="Kategorien"
