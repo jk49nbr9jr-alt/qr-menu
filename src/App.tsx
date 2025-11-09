@@ -241,9 +241,21 @@ function PublicApp() {
             <div className="mb-4 -mx-4 px-4">
               <div className="flex items-center gap-3">
                 {/* Hamburger zum Öffnen der Liste */}
-                <Button className="rounded-full w-10 h-10" onClick={() => setNavOpen(true)}>≡</Button>
+                <button
+                  aria-label="Kategorien"
+                  className="inline-flex items-center justify-center rounded-full w-10 h-10 border border-neutral-300 text-neutral-500 bg-transparent hover:text-neutral-700 hover:border-neutral-400"
+                  onClick={() => setNavOpen(true)}
+                >
+                  ≡
+                </button>
                 {/* Links scrollen */}
-                <Button className="rounded-full w-10 h-10" onClick={() => catRef.current?.scrollBy({ left: -240, behavior: 'smooth' })}>‹</Button>
+                <button
+                  aria-label="Links scrollen"
+                  className="inline-flex items-center justify-center text-neutral-500 hover:text-neutral-700 bg-transparent px-2"
+                  onClick={() => catRef.current?.scrollBy({ left: -240, behavior: 'smooth' })}
+                >
+                  ‹
+                </button>
                 {/* Scrollbare Kategorienleiste */}
                 <div
                   ref={catRef}
@@ -266,7 +278,13 @@ function PublicApp() {
                   ))}
                 </div>
                 {/* Rechts scrollen */}
-                <Button className="rounded-full w-10 h-10" onClick={() => catRef.current?.scrollBy({ left: 240, behavior: 'smooth' })}>›</Button>
+                <button
+                  aria-label="Rechts scrollen"
+                  className="inline-flex items-center justify-center text-neutral-500 hover:text-neutral-700 bg-transparent px-2"
+                  onClick={() => catRef.current?.scrollBy({ left: 240, behavior: 'smooth' })}
+                >
+                  ›
+                </button>
               </div>
             </div>
 
