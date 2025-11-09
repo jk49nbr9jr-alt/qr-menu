@@ -190,14 +190,17 @@ function PublicApp() {
   const headerRef = useRef<HTMLDivElement | null>(null);
   const [headerH, setHeaderH] = useState(56);
 
-  // Helper: center active category in scroll view
-  function centerActiveCat() {
-    const el = catRef.current?.querySelector<HTMLButtonElement>(`[data-cat="${CSS.escape(cat)}"]`);
-    if (!el || !catRef.current) return;
-    // Scroll the active pill fully into view and preferably centered
-    el.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+  // Helper: left-align active category in scroll view
+  function alignActiveCatLeft() {
+    const container = catRef.current;
+    if (!container) return;
+    const el = container.querySelector<HTMLButtonElement>(`[data-cat="${CSS.escape(cat)}"]`);
+    if (!el) return;
+    const pad = 8; // small left padding so it doesn't touch the edge
+    const target = Math.max(0, el.offsetLeft - container.offsetLeft - pad);
+    container.scrollTo({ left: target, behavior: 'smooth' });
   }
-  useEffect(() => { centerActiveCat(); }, [cat]);
+  useEffect(() => { alignActiveCatLeft(); }, [cat]);
 
   function scrollToCategory(targetCat: string) {
     const el = sectionRefs.current[targetCat];
@@ -232,7 +235,7 @@ function PublicApp() {
       setCat(first);
       // wichtig: initial kein Filter aktiv
       setFilterOn(false);
-      setTimeout(() => centerActiveCat(), 80);
+      setTimeout(() => alignActiveCatLeft(), 80);
     }
   }, [menu, categories]);
 
@@ -449,13 +452,16 @@ function AdminApp() {
   const toolbarRef = useRef<HTMLDivElement | null>(null);
   const headerRef = useRef<HTMLDivElement | null>(null);
   const [headerH, setHeaderH] = useState(56);
-  function centerActiveCatAdmin() {
-    const el = catRef.current?.querySelector<HTMLButtonElement>(`[data-cat="${CSS.escape(cat)}"]`);
-    if (!el || !catRef.current) return;
-    // Scroll the active pill fully into view and preferably centered
-    el.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+  function alignActiveCatLeftAdmin() {
+    const container = catRef.current;
+    if (!container) return;
+    const el = container.querySelector<HTMLButtonElement>(`[data-cat="${CSS.escape(cat)}"]`);
+    if (!el) return;
+    const pad = 8;
+    const target = Math.max(0, el.offsetLeft - container.offsetLeft - pad);
+    container.scrollTo({ left: target, behavior: 'smooth' });
   }
-  useEffect(() => { centerActiveCatAdmin(); }, [cat]);
+  useEffect(() => { alignActiveCatLeftAdmin(); }, [cat]);
 
   function scrollToCategory(targetCat: string) {
     const el = sectionRefs.current[targetCat];
@@ -527,7 +533,7 @@ function AdminApp() {
     if (!cat && first) {
       setCat(first);
       setFilterOn(false);
-      setTimeout(() => centerActiveCatAdmin(), 80);
+      setTimeout(() => alignActiveCatLeftAdmin(), 80);
     }
   }, [menu, categories]);
 
