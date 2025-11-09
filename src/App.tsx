@@ -187,6 +187,8 @@ function PublicApp() {
   const catRef = useRef<HTMLDivElement | null>(null);
   const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
   const toolbarRef = useRef<HTMLDivElement | null>(null);
+  const headerRef = useRef<HTMLDivElement | null>(null);
+  const [headerH, setHeaderH] = useState(56);
 
   // Helper: center active category in scroll view
   function centerActiveCat() {
@@ -202,12 +204,22 @@ function PublicApp() {
   function scrollToCategory(targetCat: string) {
     const el = sectionRefs.current[targetCat];
     if (!el) return;
-    const toolbarH = (toolbarRef.current?.offsetHeight || 0) + 56; // sticky header (56) + toolbar height
+    const toolbarH = (toolbarRef.current?.offsetHeight || 0) + headerH; // dynamic header + toolbar
     const y = el.getBoundingClientRect().top + window.scrollY - toolbarH - 8;
     window.scrollTo({ top: y, behavior: 'smooth' });
   }
 
   useEffect(() => { document.title = BRAND_TITLE; }, []);
+  useEffect(() => {
+    const update = () => setHeaderH(headerRef.current?.offsetHeight || 56);
+    update();
+    window.addEventListener('resize', update);
+    window.addEventListener('orientationchange', update);
+    return () => {
+      window.removeEventListener('resize', update);
+      window.removeEventListener('orientationchange', update);
+    };
+  }, []);
   useEffect(() => {
     const tenant = getTenantKey();
     fetchMenu(tenant).then(setMenu);
@@ -239,7 +251,7 @@ function PublicApp() {
   useEffect(() => {
     if (!categories.length) return;
     const handler = () => {
-      const toolbarH = (toolbarRef.current?.offsetHeight || 0) + 56; // sticky header + Toolbar
+      const toolbarH = (toolbarRef.current?.offsetHeight || 0) + headerH; // sticky header + Toolbar (dynamic)
       const y = window.scrollY + toolbarH + 8; // Referenzlinie knapp unter der Toolbar
       let bestCat: string | null = null;
       let bestDist = Infinity;
@@ -263,11 +275,11 @@ function PublicApp() {
     // Initial ausführen, damit beim Laden sofort die korrekte Kategorie aktiv ist
     handler();
     return () => window.removeEventListener('scroll', handler);
-  }, [categories, cat]);
+  }, [categories, cat, headerH]);
 
   return (
     <div className="min-h-screen bg-neutral-50 text-neutral-900">
-      <header className="sticky top-0 bg-white border-b">
+      <header ref={headerRef} className="sticky top-0 bg-white border-b">
         <div className="max-w-5xl mx-auto flex justify-between items-center p-4">
           <h1 className="text-xl font-bold">{BRAND_TITLE}</h1>
           <div className="flex items-center gap-2" />
@@ -292,7 +304,11 @@ function PublicApp() {
         ) : (
           <>
             {/* Kategorien-Toolbar mit Scroll und Menü */}
-            <div className="mb-4 -mx-4 px-4 sticky top-[56px] z-30 bg-white/95 backdrop-blur" ref={toolbarRef}>
+            <div
+              className="mb-4 -mx-4 px-4 sticky z-40 bg-white/95 backdrop-blur"
+              style={{ top: headerH }}
+              ref={toolbarRef}
+            >
               <div className="flex items-center gap-3">
                 {/* Suche öffnen */}
                 <button
@@ -432,6 +448,8 @@ function AdminApp() {
   const catRef = useRef<HTMLDivElement | null>(null);
   const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
   const toolbarRef = useRef<HTMLDivElement | null>(null);
+  const headerRef = useRef<HTMLDivElement | null>(null);
+  const [headerH, setHeaderH] = useState(56);
   function centerActiveCatAdmin() {
     const el = catRef.current?.querySelector<HTMLButtonElement>(`[data-cat="${CSS.escape(cat)}"]`);
     if (!el || !catRef.current) return;
@@ -445,7 +463,7 @@ function AdminApp() {
   function scrollToCategory(targetCat: string) {
     const el = sectionRefs.current[targetCat];
     if (!el) return;
-    const toolbarH = (toolbarRef.current?.offsetHeight || 0) + 56;
+    const toolbarH = (toolbarRef.current?.offsetHeight || 0) + headerH;
     const y = el.getBoundingClientRect().top + window.scrollY - toolbarH - 8;
     window.scrollTo({ top: y, behavior: 'smooth' });
   }
@@ -490,6 +508,16 @@ function AdminApp() {
 
   useEffect(() => { document.title = BRAND_TITLE + " – Admin"; }, []);
   useEffect(() => {
+    const update = () => setHeaderH(headerRef.current?.offsetHeight || 56);
+    update();
+    window.addEventListener('resize', update);
+    window.addEventListener('orientationchange', update);
+    return () => {
+      window.removeEventListener('resize', update);
+      window.removeEventListener('orientationchange', update);
+    };
+  }, []);
+  useEffect(() => {
     const tenant = getTenantKey();
     fetchMenu(tenant).then(setMenu);
   }, []);
@@ -519,7 +547,7 @@ function AdminApp() {
   useEffect(() => {
     if (!categories.length) return;
     const handler = () => {
-      const toolbarH = (toolbarRef.current?.offsetHeight || 0) + 56; // sticky header + Toolbar
+      const toolbarH = (toolbarRef.current?.offsetHeight || 0) + headerH; // sticky header + Toolbar (dynamic)
       const y = window.scrollY + toolbarH + 8; // Referenzlinie knapp unter der Toolbar
       let bestCat: string | null = null;
       let bestDist = Infinity;
@@ -543,7 +571,7 @@ function AdminApp() {
     // Initial ausführen, damit beim Laden sofort die korrekte Kategorie aktiv ist
     handler();
     return () => window.removeEventListener('scroll', handler);
-  }, [categories, cat]);
+  }, [categories, cat, headerH]);
 
   function addItem() { setEditTarget(null); setEditorOpen(true); }
   function deleteItem(id: string) {
@@ -627,7 +655,7 @@ function AdminApp() {
 
   return (
     <div className="min-h-screen bg-neutral-50 text-neutral-900">
-      <header className="sticky top-0 bg-white border-b">
+      <header ref={headerRef} className="sticky top-0 bg-white border-b">
         <div className="max-w-5xl mx-auto flex justify-between items-center p-4">
           <h1 className="text-xl font-bold">{BRAND_TITLE} – Admin</h1>
           <div className="flex items-center gap-2">
@@ -685,7 +713,11 @@ function AdminApp() {
         ) : (
           <>
             {/* Kategorien-Toolbar (Admin) */}
-            <div className="mb-4 -mx-4 px-4 sticky top-[56px] z-30 bg-white/95 backdrop-blur" ref={toolbarRef}>
+            <div
+              className="mb-4 -mx-4 px-4 sticky z-40 bg-white/95 backdrop-blur"
+              style={{ top: headerH }}
+              ref={toolbarRef}
+            >
               <div className="flex items-center gap-3">
                 {/* Suche öffnen */}
                 <button
