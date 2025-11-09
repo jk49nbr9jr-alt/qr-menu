@@ -47,6 +47,7 @@ type MenuItem = {
 };
 
 const BRAND_TITLE = "Speisekarte Urixsoft";
+const LOGO_SRC = "/logo.png";
 const ADMIN_TOKEN_KEY = "qrmenu.admin.token";
 const ADMIN_PASSWORD = "admin123"; // Demo-Passwort – später ersetzen
 const HEADER_H = 64; // fixe Höhe des fixierten Headers (px)
@@ -272,7 +273,10 @@ function PublicApp() {
     <div className="min-h-screen bg-neutral-50 text-neutral-900">
       <header className="bg-white border-b">
         <div className="max-w-5xl mx-auto flex justify-between items-center p-4">
-          <h1 className="text-xl font-bold">{BRAND_TITLE}</h1>
+          <div className="flex items-center gap-2">
+            <img src={LOGO_SRC} alt={BRAND_TITLE} className="h-7 sm:h-8 w-auto" />
+            <span className="sr-only">{BRAND_TITLE}</span>
+          </div>
           <div className="flex items-center gap-2" />
         </div>
       </header>
@@ -638,7 +642,10 @@ function AdminApp() {
     <div className="min-h-screen bg-neutral-50 text-neutral-900">
       <header className="fixed top-0 left-0 right-0 z-50 bg-white border-b">
         <div className="max-w-5xl mx-auto flex justify-between items-center p-4">
-          <h1 className="text-xl font-bold">{BRAND_TITLE} – Admin</h1>
+          <div className="flex items-center gap-3">
+            <img src={LOGO_SRC} alt={BRAND_TITLE} className="h-7 sm:h-8 w-auto" />
+            <span className="text-sm text-neutral-600">– Admin</span>
+          </div>
           <div className="flex items-center gap-2">
             <Button onClick={logout}>Logout</Button>
           </div>
