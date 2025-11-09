@@ -194,10 +194,8 @@ function PublicApp() {
   function centerActiveCat() {
     const el = catRef.current?.querySelector<HTMLButtonElement>(`[data-cat="${CSS.escape(cat)}"]`);
     if (!el || !catRef.current) return;
-    const wrap = catRef.current;
-    const elCenter = el.offsetLeft + el.offsetWidth / 2;
-    const target = elCenter - wrap.clientWidth / 2;
-    wrap.scrollTo({ left: Math.max(0, target), behavior: 'smooth' });
+    // Scroll the active pill fully into view and preferably centered
+    el.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
   }
   useEffect(() => { centerActiveCat(); }, [cat]);
 
@@ -234,6 +232,7 @@ function PublicApp() {
       setCat(first);
       // wichtig: initial kein Filter aktiv
       setFilterOn(false);
+      setTimeout(() => centerActiveCat(), 80);
     }
   }, [menu, categories]);
 
@@ -337,7 +336,7 @@ function PublicApp() {
                 {/* Scrollbare Kategorienleiste */}
                 <div
                   ref={catRef}
-                  className="flex gap-2 overflow-x-auto flex-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                  className="flex gap-2 overflow-x-auto flex-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden pl-2"
                 >
                   {categories.map((c) => (
                     <button
@@ -453,10 +452,8 @@ function AdminApp() {
   function centerActiveCatAdmin() {
     const el = catRef.current?.querySelector<HTMLButtonElement>(`[data-cat="${CSS.escape(cat)}"]`);
     if (!el || !catRef.current) return;
-    const wrap = catRef.current;
-    const elCenter = el.offsetLeft + el.offsetWidth / 2;
-    const target = elCenter - wrap.clientWidth / 2;
-    wrap.scrollTo({ left: Math.max(0, target), behavior: 'smooth' });
+    // Scroll the active pill fully into view and preferably centered
+    el.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
   }
   useEffect(() => { centerActiveCatAdmin(); }, [cat]);
 
@@ -530,6 +527,7 @@ function AdminApp() {
     if (!cat && first) {
       setCat(first);
       setFilterOn(false);
+      setTimeout(() => centerActiveCatAdmin(), 80);
     }
   }, [menu, categories]);
 
@@ -746,7 +744,7 @@ function AdminApp() {
                 {/* Scrollbare Leiste */}
                 <div
                   ref={catRef}
-                  className="flex gap-2 overflow-x-auto flex-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                  className="flex gap-2 overflow-x-auto flex-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden pl-2"
                 >
                   {categories.map((c) => (
                     <button
