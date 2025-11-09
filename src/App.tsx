@@ -49,7 +49,33 @@ type MenuItem = {
 const BRAND_TITLE = "Speisekarte Urixsoft";
 const LOGO_SRC = "/logo.png";
 const ADMIN_TOKEN_KEY = "qrmenu.admin.token";
+const ADMIN_USER_KEY = "qrmenu.admin.user";
 const ADMIN_PASSWORD = "admin123"; // Demo-Passwort – später ersetzen
+const ALLOWED_USERS = ["admin"];
+const PASSWORDS_KEY = "qrmenu.passwords";
+// -------- Passwort-Storage-Helpers --------
+function loadPasswords(): Record<string, string> {
+  try {
+    const raw = localStorage.getItem(PASSWORDS_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    if (typeof parsed !== "object" || !parsed) return {};
+    return parsed;
+  } catch {
+    return {};
+  }
+}
+function savePasswords(map: Record<string, string>) {
+  localStorage.setItem(PASSWORDS_KEY, JSON.stringify(map));
+}
+function getPasswordForUser(username: string): string {
+  if (username === "admin") {
+    const map = loadPasswords();
+    return map[username] || ADMIN_PASSWORD;
+  }
+  const map = loadPasswords();
+  return map[username] || "";
+}
 const HEADER_H = 64; // fixe Höhe des fixierten Headers (px)
 
 /* ---------- Tenant-Helfer ---------- */
@@ -186,6 +212,10 @@ function PublicApp() {
   const [, setFilterOn] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [loginOpen, setLoginOpen] = useState(false);
+  const [loginUsername, setLoginUsername] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [loginError, setLoginError] = useState<string | null>(null);
   const catRef = useRef<HTMLDivElement | null>(null);
   const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
   const toolbarRef = useRef<HTMLDivElement | null>(null);
@@ -269,16 +299,92 @@ function PublicApp() {
     return () => window.removeEventListener('scroll', handler);
   }, [categories, cat]);
 
+  // --- Login Modal Handler ---
+  function handleLoginSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setLoginError(null);
+    const username = loginUsername.trim();
+    const password = loginPassword;
+    if (!username || !password) {
+      setLoginError("Bitte Benutzername und Passwort eingeben.");
+      return;
+    }
+    if (!ALLOWED_USERS.includes(username)) {
+      setLoginError("Unbekannter Benutzer.");
+      return;
+    }
+    const map = loadPasswords();
+    let stored = map[username];
+    if (!stored && username === "admin") stored = ADMIN_PASSWORD;
+    if (!stored) {
+      setLoginError("Kein Passwort gesetzt.");
+      return;
+    }
+    if (password !== stored) {
+      setLoginError("Falsches Passwort.");
+      return;
+    }
+    // Success: set session, close modal, redirect
+    sessionStorage.setItem(ADMIN_TOKEN_KEY, "1");
+    sessionStorage.setItem(ADMIN_USER_KEY, username);
+    setLoginOpen(false);
+    setLoginUsername("");
+    setLoginPassword("");
+    setLoginError(null);
+    window.location.hash = "/admin";
+  }
+
   return (
     <div className="min-h-screen bg-neutral-50 text-neutral-900">
       <header className="bg-white border-b">
-        <div className="max-w-5xl mx-auto flex justify-center items-center p-4">
+        <div className="max-w-5xl mx-auto flex justify-between items-center p-4">
           <div className="flex items-center gap-2">
             <img src={LOGO_SRC} alt={BRAND_TITLE} className="h-7 sm:h-8 w-auto" />
             <span className="sr-only">{BRAND_TITLE}</span>
           </div>
+          <div className="flex items-center gap-2">
+            <Button onClick={() => setLoginOpen(true)}>Anmelden</Button>
+          </div>
         </div>
       </header>
+      {/* Login Modal */}
+      {loginOpen && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center">
+          <div className="w-full max-w-sm rounded-xl bg-white shadow-xl">
+            <div className="p-4 border-b flex items-center justify-between">
+              <div className="font-semibold">Login</div>
+              <Button onClick={() => { setLoginOpen(false); setLoginError(null); }}>Schließen</Button>
+            </div>
+            <form className="p-4 grid gap-3" onSubmit={handleLoginSubmit}>
+              <label className="text-sm">
+                <div>Benutzername</div>
+                <Input
+                  autoFocus
+                  value={loginUsername}
+                  onChange={e => setLoginUsername(e.target.value)}
+                  placeholder="admin"
+                />
+              </label>
+              <label className="text-sm">
+                <div>Passwort</div>
+                <Input
+                  type="password"
+                  value={loginPassword}
+                  onChange={e => setLoginPassword(e.target.value)}
+                  placeholder="Passwort"
+                />
+              </label>
+              {loginError && (
+                <div className="text-xs text-red-600">{loginError}</div>
+              )}
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <Button type="button" onClick={() => { setLoginOpen(false); setLoginError(null); }}>Abbrechen</Button>
+                <PrimaryBtn type="submit">Login</PrimaryBtn>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
       {searchOpen && (
         <div className="border-b bg-white">
           <div className="max-w-5xl mx-auto p-3">
@@ -436,6 +542,10 @@ function AdminApp() {
   const [editTarget, setEditTarget] = useState<MenuItem | null>(null);
   const [authed, setAuthed] = useState<boolean>(typeof window !== 'undefined' && sessionStorage.getItem(ADMIN_TOKEN_KEY) === '1');
   const [password, setPassword] = useState("");
+  const [username, setUsername] = useState<string>(() => {
+    if (typeof window !== "undefined") return sessionStorage.getItem(ADMIN_USER_KEY) || "";
+    return "";
+  });
   // --- Toolbar/Category Scroll State ---
   const [navOpen, setNavOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -609,8 +719,11 @@ function AdminApp() {
 
   function login(e: React.FormEvent) {
     e.preventDefault();
+    // For legacy: allow admin login via direct password entry (no username)
     if (password === ADMIN_PASSWORD) {
       sessionStorage.setItem(ADMIN_TOKEN_KEY, '1');
+      sessionStorage.setItem(ADMIN_USER_KEY, "admin");
+      setUsername("admin");
       setAuthed(true);
     } else {
       alert('Falsches Passwort');
@@ -618,7 +731,30 @@ function AdminApp() {
   }
   function logout() {
     sessionStorage.removeItem(ADMIN_TOKEN_KEY);
+    sessionStorage.removeItem(ADMIN_USER_KEY);
     setAuthed(false);
+    setUsername("");
+    window.location.hash = "/";
+  }
+
+  // Change password for current user
+  function changePassword() {
+    const currentUser = sessionStorage.getItem(ADMIN_USER_KEY) || username;
+    if (!currentUser) {
+      alert("Kein Benutzer angemeldet.");
+      return;
+    }
+    const pw1 = prompt("Neues Passwort eingeben:");
+    if (!pw1) return;
+    const pw2 = prompt("Neues Passwort wiederholen:");
+    if (pw1 !== pw2) {
+      alert("Passwörter stimmen nicht überein.");
+      return;
+    }
+    const map = loadPasswords();
+    map[currentUser] = pw1;
+    savePasswords(map);
+    alert("Passwort erfolgreich geändert.");
   }
 
   if (!authed) {
@@ -645,7 +781,17 @@ function AdminApp() {
             <img src={LOGO_SRC} alt={BRAND_TITLE} className="h-7 sm:h-8 w-auto" />
             <span className="text-sm text-neutral-600">– Admin</span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-neutral-700">
+              {sessionStorage.getItem(ADMIN_USER_KEY) || username || "admin"}
+            </span>
+            <Button
+              className="text-xs px-2 py-1"
+              style={{ fontSize: "0.85em" }}
+              onClick={changePassword}
+            >
+              Passwort ändern
+            </Button>
             <Button onClick={logout}>Logout</Button>
           </div>
         </div>
