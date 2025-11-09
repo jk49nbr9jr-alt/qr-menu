@@ -281,12 +281,13 @@ function PublicApp() {
 
   return (
     <div className="min-h-screen bg-neutral-50 text-neutral-900">
-      <header ref={headerRef} className="sticky top-0 bg-white border-b">
+      <header ref={headerRef} className="fixed top-0 left-0 right-0 z-50 bg-white border-b">
         <div className="max-w-5xl mx-auto flex justify-between items-center p-4">
           <h1 className="text-xl font-bold">{BRAND_TITLE}</h1>
           <div className="flex items-center gap-2" />
         </div>
       </header>
+      <div style={{ height: headerH }} />
       {searchOpen && (
         <div className="border-b bg-white">
           <div className="max-w-5xl mx-auto p-3">
@@ -659,7 +660,7 @@ function AdminApp() {
 
   return (
     <div className="min-h-screen bg-neutral-50 text-neutral-900">
-      <header ref={headerRef} className="sticky top-0 bg-white border-b">
+      <header ref={headerRef} className="fixed top-0 left-0 right-0 z-50 bg-white border-b">
         <div className="max-w-5xl mx-auto flex justify-between items-center p-4">
           <h1 className="text-xl font-bold">{BRAND_TITLE} – Admin</h1>
           <div className="flex items-center gap-2">
@@ -698,6 +699,7 @@ function AdminApp() {
           </div>
         </div>
       </header>
+      <div style={{ height: headerH }} />
       {searchOpen && (
         <div className="border-b bg-white">
           <div className="max-w-5xl mx-auto p-3">
