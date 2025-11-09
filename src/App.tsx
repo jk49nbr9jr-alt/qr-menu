@@ -445,6 +445,38 @@ function AdminApp() {
     scheduleAutosave();
   }
 
+  // Kategorie umbenennen
+  function renameCategory(oldName: string) {
+    const current = oldName;
+    const proposed = prompt(`Kategorie umbenennen: "${current}" →`, current);
+    const newName = proposed ? proposed.trim() : "";
+    if (!newName || newName === current) return;
+    setMenu(prev => (prev ?? []).map(i => i.category === current ? { ...i, category: newName } : i));
+    // Wenn die aktuell ausgewählte Kategorie betroffen ist, umschalten
+    if (cat === current) setCat(newName);
+    scheduleAutosave();
+  }
+
+  // Kategorie löschen
+  function deleteCategory(name: string) {
+    const list = menu ?? [];
+    const count = list.filter(i => i.category === name).length;
+    // Ziel-Kategorie ermitteln/abfragen
+    const otherCats = categories.filter(c => c !== name);
+    const fallback = otherCats[0] || "Sonstiges";
+    let target = fallback;
+    if (count > 0) {
+      const answer = prompt(`Es gibt ${count} Artikel in "${name}". In welche Kategorie verschieben? (leer = "${fallback}")`, fallback);
+      target = (answer && answer.trim()) || fallback;
+    }
+    // Artikel verschieben
+    setMenu(prev => (prev ?? []).map(i => i.category === name ? { ...i, category: target } : i));
+    // Auswahl aktualisieren
+    if (cat === name) setCat(target);
+    setFilterOn(true);
+    scheduleAutosave();
+  }
+
 
   function login(e: React.FormEvent) {
     e.preventDefault();
@@ -585,16 +617,36 @@ function AdminApp() {
                   </div>
                   <div className="p-2 max-h-[70vh] overflow-auto">
                     {categories.map((c) => (
-                      <button
+                      <div
                         key={c}
                         className={
-                          "w-full text-left px-4 py-3 border-b hover:bg-neutral-50 " +
-                          (cat === c ? "bg-neutral-100 font-semibold" : "")
+                          "w-full px-4 py-3 border-b hover:bg-neutral-50 flex items-center justify-between " +
+                          (cat === c ? "bg-neutral-100" : "")
                         }
-                        onClick={() => { setCat(c); setFilterOn(true); setNavOpen(false); }}
                       >
-                        {c}
-                      </button>
+                        <button
+                          className={"text-left flex-1 " + (cat === c ? "font-semibold" : "")}
+                          onClick={() => { setCat(c); setFilterOn(true); setNavOpen(false); }}
+                        >
+                          {c}
+                        </button>
+                        <div className="ml-3 flex items-center gap-2">
+                          <button
+                            className="text-xs px-2 py-1 border rounded-full text-neutral-600 hover:text-neutral-800 hover:border-neutral-400"
+                            onClick={(e) => { e.stopPropagation(); renameCategory(c); }}
+                            title="Kategorie umbenennen"
+                          >
+                            Umbenennen
+                          </button>
+                          <button
+                            className="text-xs px-2 py-1 border rounded-full text-red-600 hover:text-red-700 hover:border-red-300"
+                            onClick={(e) => { e.stopPropagation(); deleteCategory(c); }}
+                            title="Kategorie löschen"
+                          >
+                            Löschen
+                          </button>
+                        </div>
+                      </div>
                     ))}
                   </div>
                 </div>
