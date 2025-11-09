@@ -49,6 +49,7 @@ type MenuItem = {
 const BRAND_TITLE = "Speisekarte Urixsoft";
 const ADMIN_TOKEN_KEY = "qrmenu.admin.token";
 const ADMIN_PASSWORD = "admin123"; // Demo-Passwort – später ersetzen
+const HEADER_H = 64; // fixe Höhe des fixierten Headers (px)
 
 /* ---------- Tenant-Helfer ---------- */
 function getTenantKey() {
@@ -187,8 +188,6 @@ function PublicApp() {
   const catRef = useRef<HTMLDivElement | null>(null);
   const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
   const toolbarRef = useRef<HTMLDivElement | null>(null);
-  const headerRef = useRef<HTMLDivElement | null>(null);
-  const [headerH, setHeaderH] = useState(56);
 
   // Helper: left-align active category in scroll view
   function alignActiveCatLeft() {
@@ -205,22 +204,12 @@ function PublicApp() {
   function scrollToCategory(targetCat: string) {
     const el = sectionRefs.current[targetCat];
     if (!el) return;
-    const toolbarH = (toolbarRef.current?.offsetHeight || 0) + headerH; // dynamic header + toolbar
+    const toolbarH = (toolbarRef.current?.offsetHeight || 0) + HEADER_H; // fixed header + toolbar
     const y = el.getBoundingClientRect().top + window.scrollY - toolbarH - 8;
     window.scrollTo({ top: y, behavior: 'smooth' });
   }
 
   useEffect(() => { document.title = BRAND_TITLE; }, []);
-  useEffect(() => {
-    const update = () => setHeaderH(headerRef.current?.offsetHeight || 56);
-    update();
-    window.addEventListener('resize', update);
-    window.addEventListener('orientationchange', update);
-    return () => {
-      window.removeEventListener('resize', update);
-      window.removeEventListener('orientationchange', update);
-    };
-  }, []);
   useEffect(() => {
     const tenant = getTenantKey();
     fetchMenu(tenant).then(setMenu);
@@ -253,7 +242,7 @@ function PublicApp() {
   useEffect(() => {
     if (!categories.length) return;
     const handler = () => {
-      const toolbarH = (toolbarRef.current?.offsetHeight || 0) + headerH; // sticky header + Toolbar (dynamic)
+      const toolbarH = (toolbarRef.current?.offsetHeight || 0) + HEADER_H; // sticky header + Toolbar (fixed)
       const y = window.scrollY + toolbarH + 8; // Referenzlinie knapp unter der Toolbar
       let bestCat: string | null = null;
       let bestDist = Infinity;
@@ -277,17 +266,17 @@ function PublicApp() {
     // Initial ausführen, damit beim Laden sofort die korrekte Kategorie aktiv ist
     handler();
     return () => window.removeEventListener('scroll', handler);
-  }, [categories, cat, headerH]);
+  }, [categories, cat]);
 
   return (
     <div className="min-h-screen bg-neutral-50 text-neutral-900">
-      <header ref={headerRef} className="fixed top-0 left-0 right-0 z-50 bg-white border-b">
+      <header className="fixed top-0 left-0 right-0 z-50 bg-white border-b">
         <div className="max-w-5xl mx-auto flex justify-between items-center p-4">
           <h1 className="text-xl font-bold">{BRAND_TITLE}</h1>
           <div className="flex items-center gap-2" />
         </div>
       </header>
-      <div style={{ height: headerH }} />
+      <div style={{ height: HEADER_H }} />
       {searchOpen && (
         <div className="border-b bg-white">
           <div className="max-w-5xl mx-auto p-3">
@@ -309,7 +298,7 @@ function PublicApp() {
             {/* Kategorien-Toolbar mit Scroll und Menü */}
             <div
               className="mb-4 -mx-4 px-4 sticky z-40 bg-white/95 backdrop-blur"
-              style={{ top: headerH }}
+              style={{ top: HEADER_H }}
               ref={toolbarRef}
             >
               <div className="flex items-center gap-3">
@@ -451,8 +440,6 @@ function AdminApp() {
   const catRef = useRef<HTMLDivElement | null>(null);
   const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
   const toolbarRef = useRef<HTMLDivElement | null>(null);
-  const headerRef = useRef<HTMLDivElement | null>(null);
-  const [headerH, setHeaderH] = useState(56);
   function alignActiveCatLeftAdmin() {
     const container = catRef.current;
     if (!container) return;
@@ -467,7 +454,7 @@ function AdminApp() {
   function scrollToCategory(targetCat: string) {
     const el = sectionRefs.current[targetCat];
     if (!el) return;
-    const toolbarH = (toolbarRef.current?.offsetHeight || 0) + headerH;
+    const toolbarH = (toolbarRef.current?.offsetHeight || 0) + HEADER_H;
     const y = el.getBoundingClientRect().top + window.scrollY - toolbarH - 8;
     window.scrollTo({ top: y, behavior: 'smooth' });
   }
@@ -512,16 +499,6 @@ function AdminApp() {
 
   useEffect(() => { document.title = BRAND_TITLE + " – Admin"; }, []);
   useEffect(() => {
-    const update = () => setHeaderH(headerRef.current?.offsetHeight || 56);
-    update();
-    window.addEventListener('resize', update);
-    window.addEventListener('orientationchange', update);
-    return () => {
-      window.removeEventListener('resize', update);
-      window.removeEventListener('orientationchange', update);
-    };
-  }, []);
-  useEffect(() => {
     const tenant = getTenantKey();
     fetchMenu(tenant).then(setMenu);
   }, []);
@@ -552,7 +529,7 @@ function AdminApp() {
   useEffect(() => {
     if (!categories.length) return;
     const handler = () => {
-      const toolbarH = (toolbarRef.current?.offsetHeight || 0) + headerH; // sticky header + Toolbar (dynamic)
+      const toolbarH = (toolbarRef.current?.offsetHeight || 0) + HEADER_H; // sticky header + Toolbar (fixed)
       const y = window.scrollY + toolbarH + 8; // Referenzlinie knapp unter der Toolbar
       let bestCat: string | null = null;
       let bestDist = Infinity;
@@ -576,7 +553,7 @@ function AdminApp() {
     // Initial ausführen, damit beim Laden sofort die korrekte Kategorie aktiv ist
     handler();
     return () => window.removeEventListener('scroll', handler);
-  }, [categories, cat, headerH]);
+  }, [categories, cat]);
 
   function addItem() { setEditTarget(null); setEditorOpen(true); }
   function deleteItem(id: string) {
@@ -660,7 +637,7 @@ function AdminApp() {
 
   return (
     <div className="min-h-screen bg-neutral-50 text-neutral-900">
-      <header ref={headerRef} className="fixed top-0 left-0 right-0 z-50 bg-white border-b">
+      <header className="fixed top-0 left-0 right-0 z-50 bg-white border-b">
         <div className="max-w-5xl mx-auto flex justify-between items-center p-4">
           <h1 className="text-xl font-bold">{BRAND_TITLE} – Admin</h1>
           <div className="flex items-center gap-2">
@@ -699,7 +676,7 @@ function AdminApp() {
           </div>
         </div>
       </header>
-      <div style={{ height: headerH }} />
+      <div style={{ height: HEADER_H }} />
       {searchOpen && (
         <div className="border-b bg-white">
           <div className="max-w-5xl mx-auto p-3">
@@ -721,7 +698,7 @@ function AdminApp() {
             {/* Kategorien-Toolbar (Admin) */}
             <div
               className="mb-4 -mx-4 px-4 sticky z-40 bg-white/95 backdrop-blur"
-              style={{ top: headerH }}
+              style={{ top: HEADER_H }}
               ref={toolbarRef}
             >
               <div className="flex items-center gap-3">
