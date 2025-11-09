@@ -179,8 +179,9 @@ const Editor: React.FC<EditorProps> = ({ open, item, menu, onClose, onSave }) =>
 /* ---------- Öffentliche Ansicht (ohne Admin-UI) ---------- */
 function PublicApp() {
   const [menu, setMenu] = useState<MenuItem[] | null>(null);
-  const [cat, setCat] = useState("Alle");
+  const [cat, setCat] = useState("");
   const [search, setSearch] = useState("");
+  const [filterOn, setFilterOn] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
   const catRef = useRef<HTMLDivElement | null>(null);
 
@@ -201,13 +202,24 @@ function PublicApp() {
     fetchMenu(tenant).then(setMenu);
   }, []);
 
-  const categories = useMemo(() => ["Alle", ...Array.from(new Set((menu ?? []).map(i => i.category)))], [menu]);
+  const categories = useMemo(() => Array.from(new Set((menu ?? []).map(i => i.category))), [menu]);
+
+  useEffect(() => {
+    if (!menu) return;
+    const first = categories[0];
+    if (!cat && first) {
+      setCat(first);
+      // wichtig: initial kein Filter aktiv
+      setFilterOn(false);
+    }
+  }, [menu, categories]);
+
   const filtered = useMemo(() => {
     let items = menu ?? [];
-    if (cat !== "Alle") items = items.filter(i => i.category === cat);
+    if (filterOn && cat) items = items.filter(i => i.category === cat);
     if (search.trim()) items = items.filter(i => i.name.toLowerCase().includes(search.toLowerCase()));
     return items;
-  }, [menu, cat, search]);
+  }, [menu, cat, search, filterOn]);
 
   return (
     <div className="min-h-screen bg-neutral-50 text-neutral-900">
@@ -238,17 +250,19 @@ function PublicApp() {
                   className="flex gap-2 overflow-x-auto flex-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                 >
                   {categories.map((c) => (
-                    <Button
+                    <button
                       key={c}
                       data-cat={c}
-                      onClick={() => setCat(c)}
+                      onClick={() => { setCat(c); setFilterOn(true); }}
                       className={
-                        "shrink-0 rounded-full px-4 py-2 " +
-                        (cat === c ? "bg-black text-white" : "bg-white text-neutral-700 border-neutral-300")
+                        "shrink-0 rounded-full px-5 py-2 text-sm bg-transparent transition " +
+                        (cat === c
+                          ? "border-2 border-amber-500 text-amber-700 font-semibold"
+                          : "border-2 border-transparent text-neutral-600 hover:text-neutral-800")
                       }
                     >
                       {c}
-                    </Button>
+                    </button>
                   ))}
                 </div>
                 {/* Rechts scrollen */}
@@ -273,7 +287,7 @@ function PublicApp() {
                           "w-full text-left px-4 py-3 border-b hover:bg-neutral-50 " +
                           (cat === c ? "bg-neutral-100 font-semibold" : "")
                         }
-                        onClick={() => { setCat(c); setNavOpen(false); }}
+                        onClick={() => { setCat(c); setFilterOn(true); setNavOpen(false); }}
                       >
                         {c}
                       </button>
