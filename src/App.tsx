@@ -181,7 +181,7 @@ function PublicApp() {
   const [menu, setMenu] = useState<MenuItem[] | null>(null);
   const [cat, setCat] = useState("");
   const [search, setSearch] = useState("");
-  const [filterOn, setFilterOn] = useState(false);
+  const [, setFilterOn] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const catRef = useRef<HTMLDivElement | null>(null);
@@ -408,7 +408,7 @@ function AdminApp() {
   const [menu, setMenu] = useState<MenuItem[] | null>(null);
   const [cat, setCat] = useState("");
   const [search, setSearch] = useState("");
-  const [filterOn, setFilterOn] = useState(false);
+  const [, setFilterOn] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<MenuItem | null>(null);
   const [authed, setAuthed] = useState<boolean>(typeof window !== 'undefined' && sessionStorage.getItem(ADMIN_TOKEN_KEY) === '1');
