@@ -185,6 +185,8 @@ function PublicApp() {
   const [navOpen, setNavOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const catRef = useRef<HTMLDivElement | null>(null);
+  const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
+  const toolbarRef = useRef<HTMLDivElement | null>(null);
 
   // Helper: center active category in scroll view
   function centerActiveCat() {
@@ -196,6 +198,14 @@ function PublicApp() {
     wrap.scrollTo({ left: Math.max(0, target), behavior: 'smooth' });
   }
   useEffect(() => { centerActiveCat(); }, [cat]);
+
+  function scrollToCategory(targetCat: string) {
+    const el = sectionRefs.current[targetCat];
+    if (!el) return;
+    const toolbarH = (toolbarRef.current?.offsetHeight || 0) + 56; // sticky header (56) + toolbar height
+    const y = el.getBoundingClientRect().top + window.scrollY - toolbarH - 8;
+    window.scrollTo({ top: y, behavior: 'smooth' });
+  }
 
   useEffect(() => { document.title = BRAND_TITLE; }, []);
   useEffect(() => {
@@ -215,12 +225,32 @@ function PublicApp() {
     }
   }, [menu, categories]);
 
-  const filtered = useMemo(() => {
-    let items = menu ?? [];
-    if (filterOn && cat) items = items.filter(i => i.category === cat);
-    if (search.trim()) items = items.filter(i => i.name.toLowerCase().includes(search.toLowerCase()));
-    return items;
-  }, [menu, cat, search, filterOn]);
+  const grouped = useMemo(() => {
+    const items = (menu ?? []).filter(i => i.name.toLowerCase().includes(search.toLowerCase()));
+    const map: Record<string, MenuItem[]> = {};
+    for (const c of categories) map[c] = [];
+    for (const it of items) {
+      (map[it.category] ||= []).push(it);
+    }
+    return categories.map(c => ({ cat: c, items: map[c] || [] }));
+  }, [menu, categories, search]);
+
+  useEffect(() => {
+    if (!categories.length) return;
+    const obs = new IntersectionObserver((entries) => {
+      // pick the section closest to top that is intersecting
+      const visible = entries
+        .filter(e => e.isIntersecting)
+        .sort((a,b) => a.boundingClientRect.top - b.boundingClientRect.top);
+      if (visible[0]) {
+        const id = (visible[0].target as HTMLElement).dataset.cat || '';
+        if (id && id !== cat) setCat(id);
+      }
+    }, { root: null, rootMargin: '-120px 0px -70% 0px', threshold: [0, 0.25, 0.5, 1] });
+
+    categories.forEach(c => { const el = sectionRefs.current[c]; if (el) obs.observe(el); });
+    return () => obs.disconnect();
+  }, [categories, cat]);
 
   return (
     <div className="min-h-screen bg-neutral-50 text-neutral-900">
@@ -249,7 +279,7 @@ function PublicApp() {
         ) : (
           <>
             {/* Kategorien-Toolbar mit Scroll und Menü */}
-            <div className="mb-4 -mx-4 px-4 sticky top-[56px] z-30 bg-white/95 backdrop-blur">
+            <div className="mb-4 -mx-4 px-4 sticky top-[56px] z-30 bg-white/95 backdrop-blur" ref={toolbarRef}>
               <div className="flex items-center gap-3">
                 {/* Suche öffnen */}
                 <button
@@ -284,7 +314,7 @@ function PublicApp() {
                     <button
                       key={c}
                       data-cat={c}
-                      onClick={() => { setCat(c); setFilterOn(true); }}
+                      onClick={() => { setCat(c); setFilterOn(false); scrollToCategory(c); }}
                       className={
                         "shrink-0 rounded-full px-5 py-2 text-sm bg-transparent transition " +
                         (cat === c
@@ -324,7 +354,7 @@ function PublicApp() {
                           "w-full text-left px-4 py-3 border-b hover:bg-neutral-50 " +
                           (cat === c ? "bg-neutral-100 font-semibold" : "")
                         }
-                        onClick={() => { setCat(c); setFilterOn(true); setNavOpen(false); }}
+                        onClick={() => { setCat(c); setFilterOn(false); scrollToCategory(c); setNavOpen(false); }}
                       >
                         {c}
                       </button>
@@ -334,23 +364,34 @@ function PublicApp() {
               </div>
             )}
 
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-              {filtered.map((item) => (
-                <Card key={item.id}>
-                  <img src={item.img} alt={item.name} className="w-full h-40 object-cover rounded-t-xl" />
-                  <CardHeader>
-                    <CardTitle>{item.name}</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-sm text-neutral-600 mb-2">{item.desc}</p>
-                    <div className="font-semibold">€ {item.price.toFixed(2)}</div>
-                  </CardContent>
-                </Card>
-              ))}
-              {filtered.length === 0 && (
-                <div className="text-sm text-neutral-500">Keine Artikel gefunden.</div>
-              )}
-            </div>
+            {grouped.map(({ cat: c, items }, idx) => (
+              <section
+                key={c}
+                data-cat={c}
+                ref={(el) => { sectionRefs.current[c] = el; }}
+                className={idx === 0 ? 'pt-1' : 'pt-6 mt-6 border-t'}
+                id={`sec-${c}`}
+              >
+                <h2 className="text-xl font-semibold mb-3 px-1">{c}</h2>
+                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {items.map((item) => (
+                    <Card key={item.id}>
+                      <img src={item.img} alt={item.name} className="w-full h-40 object-cover rounded-t-xl" />
+                      <CardHeader>
+                        <CardTitle>{item.name}</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-sm text-neutral-600 mb-2">{item.desc}</p>
+                        <div className="font-semibold">€ {item.price.toFixed(2)}</div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                  {items.length === 0 && (
+                    <div className="text-sm text-neutral-500">Keine Artikel in dieser Kategorie.</div>
+                  )}
+                </div>
+              </section>
+            ))}
           </>
         )}
       </main>
@@ -376,6 +417,8 @@ function AdminApp() {
   const [navOpen, setNavOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const catRef = useRef<HTMLDivElement | null>(null);
+  const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
+  const toolbarRef = useRef<HTMLDivElement | null>(null);
   function centerActiveCatAdmin() {
     const el = catRef.current?.querySelector<HTMLButtonElement>(`[data-cat="${CSS.escape(cat)}"]`);
     if (!el || !catRef.current) return;
@@ -385,6 +428,14 @@ function AdminApp() {
     wrap.scrollTo({ left: Math.max(0, target), behavior: 'smooth' });
   }
   useEffect(() => { centerActiveCatAdmin(); }, [cat]);
+
+  function scrollToCategory(targetCat: string) {
+    const el = sectionRefs.current[targetCat];
+    if (!el) return;
+    const toolbarH = (toolbarRef.current?.offsetHeight || 0) + 56;
+    const y = el.getBoundingClientRect().top + window.scrollY - toolbarH - 8;
+    window.scrollTo({ top: y, behavior: 'smooth' });
+  }
 
   // --- Autosave Setup ---
   const ADMIN_SECRET = (import.meta as any).env.VITE_ADMIN_SECRET || "";
@@ -441,12 +492,30 @@ function AdminApp() {
     }
   }, [menu, categories]);
 
-  const filtered = useMemo(() => {
-    let items = menu ?? [];
-    if (filterOn && cat) items = items.filter(i => i.category === cat);
-    if (search.trim()) items = items.filter(i => i.name.toLowerCase().includes(search.toLowerCase()));
-    return items;
-  }, [menu, cat, search, filterOn]);
+  const grouped = useMemo(() => {
+    const items = (menu ?? []).filter(i => i.name.toLowerCase().includes(search.toLowerCase()));
+    const map: Record<string, MenuItem[]> = {};
+    for (const c of categories) map[c] = [];
+    for (const it of items) {
+      (map[it.category] ||= []).push(it);
+    }
+    return categories.map(c => ({ cat: c, items: map[c] || [] }));
+  }, [menu, categories, search]);
+
+  useEffect(() => {
+    if (!categories.length) return;
+    const obs = new IntersectionObserver((entries) => {
+      const visible = entries
+        .filter(e => e.isIntersecting)
+        .sort((a,b) => a.boundingClientRect.top - b.boundingClientRect.top);
+      if (visible[0]) {
+        const id = (visible[0].target as HTMLElement).dataset.cat || '';
+        if (id && id !== cat) setCat(id);
+      }
+    }, { root: null, rootMargin: '-120px 0px -70% 0px', threshold: [0, 0.25, 0.5, 1] });
+    categories.forEach(c => { const el = sectionRefs.current[c]; if (el) obs.observe(el); });
+    return () => obs.disconnect();
+  }, [categories, cat]);
 
   function addItem() { setEditTarget(null); setEditorOpen(true); }
   function deleteItem(id: string) {
@@ -588,7 +657,7 @@ function AdminApp() {
         ) : (
           <>
             {/* Kategorien-Toolbar (Admin) */}
-            <div className="mb-4 -mx-4 px-4 sticky top-[56px] z-30 bg-white/95 backdrop-blur">
+            <div className="mb-4 -mx-4 px-4 sticky top-[56px] z-30 bg-white/95 backdrop-blur" ref={toolbarRef}>
               <div className="flex items-center gap-3">
                 {/* Suche öffnen */}
                 <button
@@ -623,7 +692,7 @@ function AdminApp() {
                     <button
                       key={c}
                       data-cat={c}
-                      onClick={() => { setCat(c); setFilterOn(true); }}
+                      onClick={() => { setCat(c); setFilterOn(false); scrollToCategory(c); }}
                       className={
                         "shrink-0 rounded-full px-5 py-2 text-sm bg-transparent transition " +
                         (cat === c
@@ -665,7 +734,7 @@ function AdminApp() {
                       >
                         <button
                           className={"text-left flex-1 " + (cat === c ? "font-semibold" : "")}
-                          onClick={() => { setCat(c); setFilterOn(true); setNavOpen(false); }}
+                          onClick={() => { setCat(c); setFilterOn(false); scrollToCategory(c); setNavOpen(false); }}
                         >
                           {c}
                         </button>
@@ -692,29 +761,37 @@ function AdminApp() {
               </div>
             )}
 
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-              {filtered.map((item) => (
-                <Card key={item.id}>
-                  <img src={item.img} alt={item.name} className="w-full h-40 object-cover rounded-t-xl" />
-                  <CardHeader>
-                    <CardTitle>{item.name}</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-sm text-neutral-600 mb-2">{item.desc}</p>
-                    <div className="flex items-center justify-between">
-                      <div className="font-semibold">€ {item.price.toFixed(2)}</div>
-                      <div className="flex items-center gap-2">
-                        <Button onClick={() => { setEditTarget(item); setEditorOpen(true); }}>Bearbeiten</Button>
-                        <Button onClick={() => deleteItem(item.id)}>Löschen</Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-              {filtered.length === 0 && (
-                <div className="text-sm text-neutral-500">Noch keine Artikel. Mit “+ Neuer Artikel” beginnen.</div>
-              )}
-            </div>
+            {grouped.map(({ cat: c, items }, idx) => (
+              <section
+                key={c}
+                data-cat={c}
+                ref={(el) => { sectionRefs.current[c] = el; }}
+                className={idx === 0 ? 'pt-1' : 'pt-6 mt-6 border-t'}
+                id={`sec-${c}`}
+              >
+                <h2 className="text-xl font-semibold mb-3 px-1">{c}</h2>
+                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {items.map((item) => (
+                    <Card key={item.id}>
+                      <img src={item.img} alt={item.name} className="w-full h-40 object-cover rounded-t-xl" />
+                      <CardHeader>
+                        <CardTitle>{item.name}</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-sm text-neutral-600 mb-2">{item.desc}</p>
+                        <div className="flex items-center justify-between">
+                          <div className="font-semibold">€ {item.price.toFixed(2)}</div>
+                          <div className="flex items-center gap-2">
+                            <Button onClick={() => { setEditTarget(item); setEditorOpen(true); }}>Bearbeiten</Button>
+                            <Button onClick={() => deleteItem(item.id)}>Löschen</Button>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </section>
+            ))}
           </>
         )}
       </main>
