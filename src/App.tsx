@@ -181,7 +181,6 @@ function PublicApp() {
   const [menu, setMenu] = useState<MenuItem[] | null>(null);
   const [cat, setCat] = useState("Alle");
   const [search, setSearch] = useState("");
-  const [navOpen, setNavOpen] = useState(false);
 
   useEffect(() => { document.title = BRAND_TITLE; }, []);
   useEffect(() => {
@@ -203,7 +202,6 @@ function PublicApp() {
         <div className="max-w-5xl mx-auto flex justify-between items-center p-4">
           <h1 className="text-xl font-bold">{BRAND_TITLE}</h1>
           <div className="flex items-center gap-2">
-            <Button className="md:hidden" onClick={() => setNavOpen(true)}>Kategorien</Button>
             <Input placeholder="Suche im Menü..." value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
         </div>
@@ -214,65 +212,34 @@ function PublicApp() {
           <div className="p-4 text-sm text-neutral-500">Lade Menü…</div>
         ) : (
           <>
-            {/* Desktop/Tablet: feste Sidebar links */}
-            <div className="flex gap-6">
-              <aside className="w-48 shrink-0 hidden md:block">
-                <div className="sticky top-20">
-                  <div className="text-sm font-semibold mb-2">Kategorien</div>
-                  <div className="grid gap-2">
-                    {categories.map((c) => (
-                      <Button key={c} onClick={() => setCat(c)} className={"justify-start " + (cat === c ? "bg-black text-white" : "")}> 
-                        {c}
-                      </Button>
-                    ))}
-                  </div>
-                </div>
-              </aside>
-
-              <div className="flex-1">
-                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                  {filtered.map((item) => (
-                    <Card key={item.id}>
-                      <img src={item.img} alt={item.name} className="w-full h-40 object-cover rounded-t-xl" />
-                      <CardHeader>
-                        <CardTitle>{item.name}</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <p className="text-sm text-neutral-600 mb-2">{item.desc}</p>
-                        <div className="font-semibold">€ {item.price.toFixed(2)}</div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                  {filtered.length === 0 && (
-                    <div className="text-sm text-neutral-500">Keine Artikel gefunden.</div>
-                  )}
-                </div>
+            {/* Horizontal scrollable categories */}
+            <div className="mb-4 -mx-4 px-4">
+              <div className="flex gap-2 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+                {categories.map((c) => (
+                  <Button key={c} onClick={() => setCat(c)} className={"shrink-0 " + (cat === c ? "bg-black text-white" : "") }>
+                    {c}
+                  </Button>
+                ))}
               </div>
             </div>
 
-            {/* Mobile: Off-Canvas Sidebar */}
-            {navOpen && (
-              <div className="fixed inset-0 z-40">
-                <div className="absolute inset-0 bg-black/40" onClick={() => setNavOpen(false)} />
-                <div className="absolute left-0 top-0 h-full w-72 bg-white p-4 shadow-xl">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="font-semibold">Kategorien</div>
-                    <Button onClick={() => setNavOpen(false)}>Schließen</Button>
-                  </div>
-                  <div className="grid gap-2">
-                    {categories.map((c) => (
-                      <Button
-                        key={c}
-                        className={"justify-start " + (cat === c ? "bg-black text-white" : "")}
-                        onClick={() => { setCat(c); setNavOpen(false); }}
-                      >
-                        {c}
-                      </Button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              {filtered.map((item) => (
+                <Card key={item.id}>
+                  <img src={item.img} alt={item.name} className="w-full h-40 object-cover rounded-t-xl" />
+                  <CardHeader>
+                    <CardTitle>{item.name}</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-neutral-600 mb-2">{item.desc}</p>
+                    <div className="font-semibold">€ {item.price.toFixed(2)}</div>
+                  </CardContent>
+                </Card>
+              ))}
+              {filtered.length === 0 && (
+                <div className="text-sm text-neutral-500">Keine Artikel gefunden.</div>
+              )}
+            </div>
           </>
         )}
       </main>
