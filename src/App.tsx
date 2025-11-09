@@ -181,6 +181,19 @@ function PublicApp() {
   const [menu, setMenu] = useState<MenuItem[] | null>(null);
   const [cat, setCat] = useState("Alle");
   const [search, setSearch] = useState("");
+  const [navOpen, setNavOpen] = useState(false);
+  const catRef = useRef<HTMLDivElement | null>(null);
+
+  // Helper: center active category in scroll view
+  function centerActiveCat() {
+    const el = catRef.current?.querySelector<HTMLButtonElement>(`[data-cat="${CSS.escape(cat)}"]`);
+    if (!el || !catRef.current) return;
+    const wrap = catRef.current;
+    const elCenter = el.offsetLeft + el.offsetWidth / 2;
+    const target = elCenter - wrap.clientWidth / 2;
+    wrap.scrollTo({ left: Math.max(0, target), behavior: 'smooth' });
+  }
+  useEffect(() => { centerActiveCat(); }, [cat]);
 
   useEffect(() => { document.title = BRAND_TITLE; }, []);
   useEffect(() => {
@@ -212,16 +225,63 @@ function PublicApp() {
           <div className="p-4 text-sm text-neutral-500">Lade Menü…</div>
         ) : (
           <>
-            {/* Horizontal scrollable categories */}
+            {/* Kategorien-Toolbar mit Scroll und Menü */}
             <div className="mb-4 -mx-4 px-4">
-              <div className="flex gap-2 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
-                {categories.map((c) => (
-                  <Button key={c} onClick={() => setCat(c)} className={"shrink-0 " + (cat === c ? "bg-black text-white" : "") }>
-                    {c}
-                  </Button>
-                ))}
+              <div className="flex items-center gap-3">
+                {/* Hamburger zum Öffnen der Liste */}
+                <Button className="rounded-full w-10 h-10" onClick={() => setNavOpen(true)}>≡</Button>
+                {/* Links scrollen */}
+                <Button className="rounded-full w-10 h-10" onClick={() => catRef.current?.scrollBy({ left: -240, behavior: 'smooth' })}>‹</Button>
+                {/* Scrollbare Kategorienleiste */}
+                <div
+                  ref={catRef}
+                  className="flex gap-2 overflow-x-auto flex-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                >
+                  {categories.map((c) => (
+                    <Button
+                      key={c}
+                      data-cat={c}
+                      onClick={() => setCat(c)}
+                      className={
+                        "shrink-0 rounded-full px-4 py-2 " +
+                        (cat === c ? "bg-black text-white" : "bg-white text-neutral-700 border-neutral-300")
+                      }
+                    >
+                      {c}
+                    </Button>
+                  ))}
+                </div>
+                {/* Rechts scrollen */}
+                <Button className="rounded-full w-10 h-10" onClick={() => catRef.current?.scrollBy({ left: 240, behavior: 'smooth' })}>›</Button>
               </div>
             </div>
+
+            {/* Vollbild-Overlay mit Kategorienliste (ähnlich dem Screenshot) */}
+            {navOpen && (
+              <div className="fixed inset-0 z-50">
+                <div className="absolute inset-0 bg-black/40" onClick={() => setNavOpen(false)} />
+                <div className="absolute left-0 right-0 top-0 mx-auto max-w-md bg-white/95 backdrop-blur rounded-b-2xl shadow-xl">
+                  <div className="flex items-center justify-between p-4 border-b">
+                    <div className="text-lg font-semibold">Kategorien</div>
+                    <Button className="rounded-full w-10 h-10" onClick={() => setNavOpen(false)}>×</Button>
+                  </div>
+                  <div className="p-2 max-h-[70vh] overflow-auto">
+                    {categories.map((c) => (
+                      <button
+                        key={c}
+                        className={
+                          "w-full text-left px-4 py-3 border-b hover:bg-neutral-50 " +
+                          (cat === c ? "bg-neutral-100 font-semibold" : "")
+                        }
+                        onClick={() => { setCat(c); setNavOpen(false); }}
+                      >
+                        {c}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
               {filtered.map((item) => (
