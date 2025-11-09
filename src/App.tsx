@@ -235,21 +235,34 @@ function PublicApp() {
     return categories.map(c => ({ cat: c, items: map[c] || [] }));
   }, [menu, categories, search]);
 
+  // Scroll listener: bestimmt die aktive Kategorie exakt an der "oberen Kante"
   useEffect(() => {
     if (!categories.length) return;
-    const obs = new IntersectionObserver((entries) => {
-      // pick the section closest to top that is intersecting
-      const visible = entries
-        .filter(e => e.isIntersecting)
-        .sort((a,b) => a.boundingClientRect.top - b.boundingClientRect.top);
-      if (visible[0]) {
-        const id = (visible[0].target as HTMLElement).dataset.cat || '';
-        if (id && id !== cat) setCat(id);
+    const handler = () => {
+      const toolbarH = (toolbarRef.current?.offsetHeight || 0) + 56; // sticky header + Toolbar
+      const y = window.scrollY + toolbarH + 8; // Referenzlinie knapp unter der Toolbar
+      let bestCat: string | null = null;
+      let bestDist = Infinity;
+      for (const c of categories) {
+        const el = sectionRefs.current[c];
+        if (!el) continue;
+        const top = el.offsetTop; // absoluter Abstand vom Dokumentanfang
+        if (y >= top) {
+          const d = y - top;
+          if (d < bestDist) {
+            bestDist = d;
+            bestCat = c;
+          }
+        }
       }
-    }, { root: null, rootMargin: '-120px 0px -70% 0px', threshold: [0, 0.25, 0.5, 1] });
-
-    categories.forEach(c => { const el = sectionRefs.current[c]; if (el) obs.observe(el); });
-    return () => obs.disconnect();
+      // Falls wir oberhalb der ersten Sektion sind, nimm die erste
+      if (!bestCat && categories[0]) bestCat = categories[0];
+      if (bestCat && bestCat !== cat) setCat(bestCat);
+    };
+    window.addEventListener('scroll', handler, { passive: true });
+    // Initial ausführen, damit beim Laden sofort die korrekte Kategorie aktiv ist
+    handler();
+    return () => window.removeEventListener('scroll', handler);
   }, [categories, cat]);
 
   return (
@@ -502,19 +515,34 @@ function AdminApp() {
     return categories.map(c => ({ cat: c, items: map[c] || [] }));
   }, [menu, categories, search]);
 
+  // Scroll listener: bestimmt die aktive Kategorie exakt an der "oberen Kante"
   useEffect(() => {
     if (!categories.length) return;
-    const obs = new IntersectionObserver((entries) => {
-      const visible = entries
-        .filter(e => e.isIntersecting)
-        .sort((a,b) => a.boundingClientRect.top - b.boundingClientRect.top);
-      if (visible[0]) {
-        const id = (visible[0].target as HTMLElement).dataset.cat || '';
-        if (id && id !== cat) setCat(id);
+    const handler = () => {
+      const toolbarH = (toolbarRef.current?.offsetHeight || 0) + 56; // sticky header + Toolbar
+      const y = window.scrollY + toolbarH + 8; // Referenzlinie knapp unter der Toolbar
+      let bestCat: string | null = null;
+      let bestDist = Infinity;
+      for (const c of categories) {
+        const el = sectionRefs.current[c];
+        if (!el) continue;
+        const top = el.offsetTop; // absoluter Abstand vom Dokumentanfang
+        if (y >= top) {
+          const d = y - top;
+          if (d < bestDist) {
+            bestDist = d;
+            bestCat = c;
+          }
+        }
       }
-    }, { root: null, rootMargin: '-120px 0px -70% 0px', threshold: [0, 0.25, 0.5, 1] });
-    categories.forEach(c => { const el = sectionRefs.current[c]; if (el) obs.observe(el); });
-    return () => obs.disconnect();
+      // Falls wir oberhalb der ersten Sektion sind, nimm die erste
+      if (!bestCat && categories[0]) bestCat = categories[0];
+      if (bestCat && bestCat !== cat) setCat(bestCat);
+    };
+    window.addEventListener('scroll', handler, { passive: true });
+    // Initial ausführen, damit beim Laden sofort die korrekte Kategorie aktiv ist
+    handler();
+    return () => window.removeEventListener('scroll', handler);
   }, [categories, cat]);
 
   function addItem() { setEditTarget(null); setEditorOpen(true); }
