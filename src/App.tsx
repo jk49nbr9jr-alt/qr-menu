@@ -204,7 +204,7 @@ function PublicApp() {
   function scrollToCategory(targetCat: string) {
     const el = sectionRefs.current[targetCat];
     if (!el) return;
-    const toolbarH = (toolbarRef.current?.offsetHeight || 0) + HEADER_H; // fixed header + toolbar
+    const toolbarH = (toolbarRef.current?.offsetHeight || 0); // only toolbar height
     const y = el.getBoundingClientRect().top + window.scrollY - toolbarH - 8;
     window.scrollTo({ top: y, behavior: 'smooth' });
   }
@@ -242,7 +242,7 @@ function PublicApp() {
   useEffect(() => {
     if (!categories.length) return;
     const handler = () => {
-      const toolbarH = (toolbarRef.current?.offsetHeight || 0) + HEADER_H; // sticky header + Toolbar (fixed)
+      const toolbarH = (toolbarRef.current?.offsetHeight || 0); // only toolbar height (header scrolls away)
       const y = window.scrollY + toolbarH + 8; // Referenzlinie knapp unter der Toolbar
       let bestCat: string | null = null;
       let bestDist = Infinity;
@@ -270,13 +270,12 @@ function PublicApp() {
 
   return (
     <div className="min-h-screen bg-neutral-50 text-neutral-900">
-      <header className="fixed top-0 left-0 right-0 z-50 bg-white border-b">
+      <header className="bg-white border-b">
         <div className="max-w-5xl mx-auto flex justify-between items-center p-4">
           <h1 className="text-xl font-bold">{BRAND_TITLE}</h1>
           <div className="flex items-center gap-2" />
         </div>
       </header>
-      <div style={{ height: HEADER_H }} />
       {searchOpen && (
         <div className="border-b bg-white">
           <div className="max-w-5xl mx-auto p-3">
@@ -298,7 +297,7 @@ function PublicApp() {
             {/* Kategorien-Toolbar mit Scroll und Menü */}
             <div
               className="mb-4 -mx-4 px-4 sticky z-40 bg-white/95 backdrop-blur"
-              style={{ top: HEADER_H }}
+              style={{ top: 0 }}
               ref={toolbarRef}
             >
               <div className="flex items-center gap-3">
