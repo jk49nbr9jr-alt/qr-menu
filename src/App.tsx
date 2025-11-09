@@ -346,12 +346,25 @@ function PublicApp() {
 /* ---------- Admin-Bereich unter /admin ---------- */
 function AdminApp() {
   const [menu, setMenu] = useState<MenuItem[] | null>(null);
-  const [cat, setCat] = useState("Alle");
+  const [cat, setCat] = useState("");
   const [search, setSearch] = useState("");
+  const [filterOn, setFilterOn] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<MenuItem | null>(null);
   const [authed, setAuthed] = useState<boolean>(typeof window !== 'undefined' && sessionStorage.getItem(ADMIN_TOKEN_KEY) === '1');
   const [password, setPassword] = useState("");
+  // --- Toolbar/Category Scroll State ---
+  const [navOpen, setNavOpen] = useState(false);
+  const catRef = useRef<HTMLDivElement | null>(null);
+  function centerActiveCatAdmin() {
+    const el = catRef.current?.querySelector<HTMLButtonElement>(`[data-cat="${CSS.escape(cat)}"]`);
+    if (!el || !catRef.current) return;
+    const wrap = catRef.current;
+    const elCenter = el.offsetLeft + el.offsetWidth / 2;
+    const target = elCenter - wrap.clientWidth / 2;
+    wrap.scrollTo({ left: Math.max(0, target), behavior: 'smooth' });
+  }
+  useEffect(() => { centerActiveCatAdmin(); }, [cat]);
 
   // --- Autosave Setup ---
   const ADMIN_SECRET = (import.meta as any).env.VITE_ADMIN_SECRET || "";
@@ -397,13 +410,23 @@ function AdminApp() {
     fetchMenu(tenant).then(setMenu);
   }, []);
 
-  const categories = useMemo(() => ["Alle", ...Array.from(new Set((menu ?? []).map(i => i.category)))], [menu]);
+  const categories = useMemo(() => Array.from(new Set((menu ?? []).map(i => i.category))), [menu]);
+
+  useEffect(() => {
+    if (!menu) return;
+    const first = categories[0];
+    if (!cat && first) {
+      setCat(first);
+      setFilterOn(false);
+    }
+  }, [menu, categories]);
+
   const filtered = useMemo(() => {
     let items = menu ?? [];
-    if (cat !== "Alle") items = items.filter(i => i.category === cat);
+    if (filterOn && cat) items = items.filter(i => i.category === cat);
     if (search.trim()) items = items.filter(i => i.name.toLowerCase().includes(search.toLowerCase()));
     return items;
-  }, [menu, cat, search]);
+  }, [menu, cat, search, filterOn]);
 
   function addItem() { setEditTarget(null); setEditorOpen(true); }
   function deleteItem(id: string) {
@@ -501,13 +524,82 @@ function AdminApp() {
           <div className="p-4 text-sm text-neutral-500">Lade Menü…</div>
         ) : (
           <>
-            <div className="flex gap-2 mb-4 flex-wrap">
-              {categories.map((c) => (
-                <Button key={c} onClick={() => setCat(c)} className={cat === c ? "bg-black text-white" : ""}>
-                  {c}
-                </Button>
-              ))}
+            {/* Kategorien-Toolbar (Admin) */}
+            <div className="mb-4 -mx-4 px-4">
+              <div className="flex items-center gap-3">
+                {/* Hamburger */}
+                <button
+                  aria-label="Kategorien"
+                  className="inline-flex items-center justify-center rounded-full w-10 h-10 border border-neutral-300 text-neutral-500 bg-transparent hover:text-neutral-700 hover:border-neutral-400"
+                  onClick={() => setNavOpen(true)}
+                >
+                  ≡
+                </button>
+                {/* Links scrollen */}
+                <button
+                  aria-label="Links scrollen"
+                  className="inline-flex items-center justify-center text-neutral-500 hover:text-neutral-700 bg-transparent px-2"
+                  onClick={() => catRef.current?.scrollBy({ left: -240, behavior: 'smooth' })}
+                >
+                  ‹
+                </button>
+                {/* Scrollbare Leiste */}
+                <div
+                  ref={catRef}
+                  className="flex gap-2 overflow-x-auto flex-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                >
+                  {categories.map((c) => (
+                    <button
+                      key={c}
+                      data-cat={c}
+                      onClick={() => { setCat(c); setFilterOn(true); }}
+                      className={
+                        "shrink-0 rounded-full px-5 py-2 text-sm bg-transparent transition " +
+                        (cat === c
+                          ? "border-2 border-amber-500 text-amber-700 font-semibold"
+                          : "border-2 border-transparent text-neutral-600 hover:text-neutral-800")
+                      }
+                    >
+                      {c}
+                    </button>
+                  ))}
+                </div>
+                {/* Rechts scrollen */}
+                <button
+                  aria-label="Rechts scrollen"
+                  className="inline-flex items-center justify-center text-neutral-500 hover:text-neutral-700 bg-transparent px-2"
+                  onClick={() => catRef.current?.scrollBy({ left: 240, behavior: 'smooth' })}
+                >
+                  ›
+                </button>
+              </div>
             </div>
+
+            {navOpen && (
+              <div className="fixed inset-0 z-50">
+                <div className="absolute inset-0 bg-black/40" onClick={() => setNavOpen(false)} />
+                <div className="absolute left-0 right-0 top-0 mx-auto max-w-md bg-white/95 backdrop-blur rounded-b-2xl shadow-xl">
+                  <div className="flex items-center justify-between p-4 border-b">
+                    <div className="text-lg font-semibold">Kategorien</div>
+                    <Button className="rounded-full w-10 h-10" onClick={() => setNavOpen(false)}>×</Button>
+                  </div>
+                  <div className="p-2 max-h-[70vh] overflow-auto">
+                    {categories.map((c) => (
+                      <button
+                        key={c}
+                        className={
+                          "w-full text-left px-4 py-3 border-b hover:bg-neutral-50 " +
+                          (cat === c ? "bg-neutral-100 font-semibold" : "")
+                        }
+                        onClick={() => { setCat(c); setFilterOn(true); setNavOpen(false); }}
+                      >
+                        {c}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
               {filtered.map((item) => (
