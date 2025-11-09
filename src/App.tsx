@@ -272,12 +272,11 @@ function PublicApp() {
   return (
     <div className="min-h-screen bg-neutral-50 text-neutral-900">
       <header className="bg-white border-b">
-        <div className="max-w-5xl mx-auto flex justify-between items-center p-4">
+        <div className="max-w-5xl mx-auto flex justify-center items-center p-4">
           <div className="flex items-center gap-2">
             <img src={LOGO_SRC} alt={BRAND_TITLE} className="h-7 sm:h-8 w-auto" />
             <span className="sr-only">{BRAND_TITLE}</span>
           </div>
-          <div className="flex items-center gap-2" />
         </div>
       </header>
       {searchOpen && (
