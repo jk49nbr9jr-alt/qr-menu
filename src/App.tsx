@@ -124,46 +124,6 @@ async function serverDeleteUser(username: string) {
   if (!r.ok) throw new Error(await r.text());
 }
 
-// -------- User-Store-Helpers (legacy local) --------
-function loadAllowedUsers(): string[] {
-  try {
-    const raw = localStorage.getItem(ALLOWED_USERS_KEY);
-    const arr = raw ? JSON.parse(raw) : null;
-    const def = ["admin"];
-    if (!Array.isArray(arr)) return def;
-    if (!arr.includes("admin")) arr.push("admin");
-    return arr;
-  } catch { return ["admin"]; }
-}
-function saveAllowedUsers(list: string[]) {
-  const set = Array.from(new Set([...list, "admin"]));
-  localStorage.setItem(ALLOWED_USERS_KEY, JSON.stringify(set));
-}
-function loadPendingUsers(): Record<string,string> {
-  try {
-    const raw = localStorage.getItem(PENDING_USERS_KEY);
-    const obj = raw ? JSON.parse(raw) : null;
-    return obj && typeof obj === "object" ? obj : {};
-  } catch { return {}; }
-}
-function savePendingUsers(map: Record<string,string>) {
-  localStorage.setItem(PENDING_USERS_KEY, JSON.stringify(map));
-}
-// -------- Passwort-Storage-Helpers --------
-function loadPasswords(): Record<string, string> {
-  try {
-    const raw = localStorage.getItem(PASSWORDS_KEY);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw);
-    if (typeof parsed !== "object" || !parsed) return {};
-    return parsed;
-  } catch {
-    return {};
-  }
-}
-function savePasswords(map: Record<string, string>) {
-  localStorage.setItem(PASSWORDS_KEY, JSON.stringify(map));
-}
 const HEADER_H = 64; // fixe Höhe des fixierten Headers (px)
 
 /* ---------- Tenant-Helfer ---------- */
@@ -989,13 +949,6 @@ function AdminApp() {
     } else {
       alert('Falsches Passwort');
     }
-  }
-  function logout() {
-    sessionStorage.removeItem(ADMIN_TOKEN_KEY);
-    sessionStorage.removeItem(ADMIN_USER_KEY);
-    setAuthed(false);
-    setUsername("");
-    window.location.hash = "/";
   }
 
   // Passwort ändern (Server)
