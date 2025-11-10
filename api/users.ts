@@ -1,124 +1,95 @@
 // api/users.ts
-import type { IncomingMessage, ServerResponse } from 'http';
-import { Buffer } from 'node:buffer';
+export const config = { runtime: "edge" };
 
-export const config = { runtime: 'nodejs' } as const;
+type UsersJson = {
+  allowed?: string[];
+  pending?: Record<string, string>;
+  passwords?: Record<string, string>;
+};
 
-type UsersJson = { allowed: string[]; passwords: Record<string, string> };
-type PendingJson = Record<string, string>;
-type GitHubFile = { content: string; sha: string; encoding: string };
+const GH_OWNER  = process.env.GITHUB_OWNER!;
+const GH_REPO   = process.env.GITHUB_REPO!;
+const GH_BRANCH = process.env.GITHUB_BRANCH || "main";
+const GH_TOKEN  = process.env.GITHUB_TOKEN!;
+const ADMIN_SECRET = process.env.ADMIN_SECRET || process.env.VITE_ADMIN_SECRET || "";
 
-function sanitizeTenant(input?: string) {
-  const raw = (input || '').toString().trim().toLowerCase();
-  const clean = raw.replace(/[^a-z0-9._-]/g, '');
-  return clean || 'speisekarte';
-}
+// base64 utils (Edge)
+const dec = (b: string) => decodeURIComponent(escape(atob(b)));
 
-const GH_OWNER = process.env.GITHUB_OWNER || '';
-const GH_REPO  = process.env.GITHUB_REPO  || '';
-const GH_TOKEN = process.env.GITHUB_TOKEN || '';
-
-function buildURL(req: IncomingMessage) {
-  const proto = (req.headers['x-forwarded-proto'] as string) || 'https';
-  const host  = (req.headers['x-forwarded-host'] as string) || (req.headers.host as string) || 'localhost';
-  const path  = typeof req.url === 'string' ? req.url : '/';
-  return new URL(`${proto}://${host}${path}`);
-}
-
-function json(res: ServerResponse, status: number, body: any) {
-  const data = JSON.stringify(body);
-  res.statusCode = status;
-  res.setHeader('Content-Type', 'application/json');
-  res.setHeader('Cache-Control', 'no-store');
-  res.end(data);
-}
-
-async function gh<T = any>(url: string, init?: RequestInit): Promise<T> {
-  const r = await fetch(`https://api.github.com${url}`, {
-    ...init,
-    headers: {
-      Accept: 'application/vnd.github+json',
-      Authorization: `Bearer ${GH_TOKEN}`,
-      'User-Agent': 'qr-menu-api',
-      ...(init?.headers || {}),
-    },
-    cache: 'no-store',
+function jsonRes(status: number, body: unknown) {
+  return new Response(JSON.stringify(body, null, 2), {
+    status,
+    headers: { "content-type": "application/json" },
   });
-  if (!r.ok) {
-    const text = await r.text().catch(() => '');
-    throw new Error(`GitHub ${r.status}: ${text || r.statusText}`);
-  }
-  return (await r.json()) as T;
 }
 
-async function ghGetFile(path: string): Promise<GitHubFile> {
-  return gh(`/repos/${GH_OWNER}/${GH_REPO}/contents/${encodeURIComponent(path)}`);
+async function gh<T>(path: string): Promise<T> {
+  const r = await fetch(`https://api.github.com${path}`, {
+    headers: {
+      Authorization: `Bearer ${GH_TOKEN}`,
+      Accept: "application/vnd.github+json",
+    },
+    cache: "no-store",
+  });
+  if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
+  return r.json() as Promise<T>;
 }
 
-async function readJsonFile<T>(path: string, fallback: T): Promise<T> {
+export default async function handler(req: Request) {
   try {
-    const f = await ghGetFile(path);
-    const enc = (f.encoding as BufferEncoding) || 'base64';
-    const buf = Buffer.from(f.content || '', enc);
-    return JSON.parse(buf.toString('utf8')) as T;
-  } catch {
-    return fallback;
-  }
-}
+    const url = new URL(req.url);
+    const tenant = (url.searchParams.get("tenant") || "").trim();
+    if (!tenant) return jsonRes(400, { ok: false, error: "tenant missing" });
 
-export default async function handler(req: IncomingMessage, res: ServerResponse) {
-  try {
-    const url = buildURL(req);
-    const debug  = url.searchParams.get('debug') === '1';
-    const tenant = sanitizeTenant(url.searchParams.get('tenant') || undefined);
+    // optional: self-test mode
+    const mode = url.searchParams.get("mode") || "";
 
-    if (!GH_OWNER || !GH_REPO || !GH_TOKEN) {
-      return json(res, 500, {
-        ok: false,
-        error: 'missing-github-config',
-        ...(debug && {
-          env: {
-            GITHUB_OWNER_present: !!GH_OWNER,
-            GITHUB_REPO_present: !!GH_REPO,
-            GITHUB_TOKEN_present: !!GH_TOKEN,
-          },
-        }),
-      });
+    // read users.json from repo (if missing, return defaults)
+    type GHFile = { content: string; sha: string; encoding: "base64" };
+    let users: UsersJson = { allowed: ["admin"], pending: {}, passwords: {} };
+
+    try {
+      const file = await gh<GHFile>(
+        `/repos/${GH_OWNER}/${GH_REPO}/contents/data/${tenant}/users.json?ref=${encodeURIComponent(GH_BRANCH)}`
+      );
+      const text = dec(file.content);
+      const parsed = JSON.parse(text) as UsersJson;
+      users.allowed = parsed.allowed || ["admin"];
+      users.pending = parsed.pending || {};
+      users.passwords = parsed.passwords || {};
+    } catch {
+      // file not found => keep defaults
     }
 
-    const usersPath   = `data/${tenant}/users.json`;
-    const pendingPath = `data/${tenant}/pending.json`;
+    // include passwords only with valid secret
+    const hasSecret =
+      !!ADMIN_SECRET && req.headers.get("x-admin-secret") === ADMIN_SECRET;
 
-    let usersErr: string | null = null;
-    let pendingErr: string | null = null;
+    const body: any = {
+      ok: true,
+      allowed: users.allowed || ["admin"],
+      pending: users.pending || {},
+    };
 
-    let users: UsersJson = { allowed: ['admin'], passwords: {} };
-    let pending: PendingJson = {};
+    if (hasSecret) {
+      body.passwords = users.passwords || {};
+    }
 
-    try { users   = await readJsonFile<UsersJson>(usersPath, users); }   catch (e: any) { usersErr   = String(e?.message || e); }
-    try { pending = await readJsonFile<PendingJson>(pendingPath, {}); } catch (e: any) { pendingErr = String(e?.message || e); }
-
-    if (debug) {
-      return json(res, 200, {
-        ok: true,
-        tenant,
-        paths: { usersPath, pendingPath },
-        env: {
+    // optional visibility for quick checks
+    if (mode === "selftest") {
+      body.selftest = {
+        hasSecret,
+        keys: {
           GITHUB_OWNER_present: !!GH_OWNER,
           GITHUB_REPO_present: !!GH_REPO,
           GITHUB_TOKEN_present: !!GH_TOKEN,
         },
-        usersErr,
-        pendingErr,
-        allowed: users.allowed,
-        pending,
-      });
+        tenant,
+      };
     }
 
-    return json(res, 200, { ok: true, allowed: users.allowed, pending });
-
-  } catch (e: any) {
-    console.error('[api/users] CRASH', e);
-    return json(res, 500, { ok: false, error: 'handler-crash', message: String(e?.message || e) });
+    return jsonRes(200, body);
+  } catch (err: any) {
+    return jsonRes(500, { ok: false, error: String(err?.message || err) });
   }
 }
