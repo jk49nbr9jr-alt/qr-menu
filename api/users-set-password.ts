@@ -1,197 +1,123 @@
-export const config = { runtime: 'nodejs' } as const;
+// Serverless function: set or change a user's password
+// Works on Vercel (edge runtime).
+// Updates `data/<tenant>/passwords.json` in the GitHub repo via the Contents API.
 
-/**
- * Set (or reset) a user's password inside data/<tenant>/users.json
- * Uses GitHub Contents API (no local FS) and requires x-admin-secret.
- *
- * POST Body: { tenant?: string, username: string, password: string }
- * GET  : only for diagnostics => /api/users-set-password?tenant=...&mode=selftest
- */
+export const config = { runtime: 'edge' };
 
-type UsersJson = { allowed: string[]; passwords: Record<string, string> };
-type GitHubFile = { content: string; sha: string; encoding: string };
+// --- Env ---
+const GH_OWNER   = process.env.GITHUB_OWNER as string;
+const GH_REPO    = process.env.GITHUB_REPO as string;
+const GH_BRANCH  = process.env.GITHUB_BRANCH || 'main';
+const GH_TOKEN   = process.env.GITHUB_TOKEN as string; // classic/token with repo contents scope
+const ADMIN_SECRET = process.env.ADMIN_SECRET as string;
 
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type,x-admin-secret',
-};
-
-function ok(data: any, status = 200) {
-  return new Response(JSON.stringify({ ok: true, ...data }, null, 2), {
+// --- Helpers ---
+function jsonRes(status: number, data: unknown) {
+  return new Response(JSON.stringify(data, null, 2), {
     status,
-    headers: { 'Content-Type': 'application/json', ...CORS },
-  });
-}
-function err(status: number, message: string, details?: any) {
-  return new Response(JSON.stringify({ ok: false, error: message, details }, null, 2), {
-    status,
-    headers: { 'Content-Type': 'application/json', ...CORS },
+    headers: { 'content-type': 'application/json' },
   });
 }
 
-function getUrl(req: any): URL {
-  const raw = (req as any)?.url || '';
-  const host = headerGet(req as any, 'host') || 'localhost';
-  try {
-    return new URL(raw, `http://${host}`);
-  } catch {
-    // fallback (should never happen)
-    return new URL(`http://${host}/`);
+function requireEnv() {
+  const missing: string[] = [];
+  if (!GH_OWNER) missing.push('GITHUB_OWNER');
+  if (!GH_REPO) missing.push('GITHUB_REPO');
+  if (!GH_TOKEN) missing.push('GITHUB_TOKEN');
+  if (!ADMIN_SECRET) missing.push('ADMIN_SECRET');
+  if (missing.length) {
+    throw new Error('Missing env: ' + missing.join(', '));
   }
-}
-
-async function readJsonBody(req: any): Promise<any> {
-  try {
-    if (typeof (req as any).json === 'function') {
-      return await (req as any).json();
-    }
-  } catch { /* fall through to stream read */ }
-
-  // Stream read (Node.js IncomingMessage)
-  const chunks: Uint8Array[] = [];
-  for await (const chunk of req as any) {
-    chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : Buffer.from(chunk));
-  }
-  const text = Buffer.concat(chunks).toString('utf8');
-  try { return JSON.parse(text); } catch { return {}; }
-}
-
-/** normalize tenant from body or query */
-function sanitizeTenant(input?: string) {
-  const raw = (input || '').toString().trim().toLowerCase();
-  const clean = raw.replace(/[^a-z0-9._-]/g, '');
-  return clean || 'speisekarte';
-}
-
-/** headers.get fallback for Node.js runtime (where req.headers is a plain object) */
-function headerGet(req: Request, name: string): string | null {
-  const h: any = (req as any).headers;
-  if (h && typeof h.get === 'function') return h.get(name);
-  if (h && typeof h === 'object') {
-    const key = Object.keys(h).find(k => k.toLowerCase() === name.toLowerCase());
-    return key ? String(h[key]) : null;
-  }
-  return null;
 }
 
 function requireSecret(req: Request) {
-  const hdr = headerGet(req, 'x-admin-secret') || '';
-  const expected = process.env.VITE_ADMIN_SECRET || process.env.ADMIN_SECRET || '';
-  return !!expected && hdr === expected;
+  const hdr = req.headers.get('x-admin-secret') || '';
+  if (hdr !== ADMIN_SECRET) throw new Error('Forbidden');
 }
 
-const GH_OWNER = process.env.GITHUB_OWNER || '';
-const GH_REPO  = process.env.GITHUB_REPO  || '';
-const GH_TOKEN = process.env.GITHUB_TOKEN || '';
-
-async function gh<T = any>(url: string, init?: RequestInit): Promise<T> {
-  const r = await fetch(`https://api.github.com${url}`, {
-    ...init,
-    headers: {
-      Accept: 'application/vnd.github+json',
-      Authorization: `Bearer ${GH_TOKEN}`,
-      'User-Agent': 'qr-menu-api',
-      ...(init?.headers || {}),
-    },
-    cache: 'no-store',
-  });
-  if (!r.ok) {
-    const text = await r.text().catch(() => '');
-    throw new Error(`GitHub ${r.status}: ${text || r.statusText}`);
-  }
-  return (await r.json()) as T;
+function pathFor(tenant: string) {
+  return `data/${tenant}/passwords.json`;
 }
 
-async function ghGetFile(path: string): Promise<GitHubFile & { sha: string }> {
-  return gh(`/repos/${GH_OWNER}/${GH_REPO}/contents/${encodeURIComponent(path)}`);
+async function ghFetch(path: string, init?: RequestInit) {
+  const url = `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}${path}`;
+  const headers = {
+    'Authorization': `Bearer ${GH_TOKEN}`,
+    'Accept': 'application/vnd.github+json',
+    ...init?.headers as Record<string, string> ?? {}
+  };
+  const res = await fetch(url, { ...init, headers });
+  return res;
 }
-async function ghPutJson(path: string, obj: unknown, sha: string | null, message: string) {
-  // Buffer is available in node runtime
-  const content = Buffer.from(JSON.stringify(obj, null, 2), 'utf8').toString('base64');
-  return gh(`/repos/${GH_OWNER}/${GH_REPO}/contents/${encodeURIComponent(path)}`, {
+
+async function readJsonFromRepo(filePath: string, fallback: any) {
+  // read file + sha via contents API
+  const q = new URLSearchParams({ ref: GH_BRANCH }).toString();
+  const r = await ghFetch(`/contents/${filePath}?${q}`);
+  if (r.status === 404) return { data: fallback, sha: undefined };
+  if (!r.ok) throw new Error(`[read] ${r.status} ${await r.text()}`);
+  const js = await r.json();
+  const content = typeof js.content === 'string' ? atob(js.content.replace(/\n/g, '')) : '';
+  let parsed: any = fallback;
+  try { parsed = JSON.parse(content); } catch {}
+  return { data: parsed, sha: js.sha as string };
+}
+
+async function writeJsonToRepo(filePath: string, data: any, sha: string | undefined, message: string) {
+  const body = {
+    message,
+    content: btoa(unescape(encodeURIComponent(JSON.stringify(data, null, 2)))).replace(/=+$/,'') ,
+    branch: GH_BRANCH,
+    sha
+  } as any;
+  // when no sha (new file) GitHub ignores undefined, but some runtimes send it – strip explicitly
+  if (!sha) delete body.sha;
+  const r = await ghFetch(`/contents/${filePath}`, {
     method: 'PUT',
-    body: JSON.stringify({ message, content, sha: sha || undefined }),
+    body: JSON.stringify(body),
+    headers: { 'content-type': 'application/json' }
   });
+  if (!r.ok) throw new Error(`[write] ${r.status} ${await r.text()}`);
+  return r.json();
 }
 
-async function readUsers(path: string): Promise<{ data: UsersJson; sha: string | null }> {
-  try {
-    const f = await ghGetFile(path);
-    const buf = Buffer.from(f.content, (f.encoding as BufferEncoding) || 'base64');
-    const parsed = JSON.parse(buf.toString('utf8')) as UsersJson;
-    return { data: parsed, sha: f.sha };
-  } catch {
-    return { data: { allowed: ['admin'], passwords: {} }, sha: null };
-  }
-}
-
+// --- Handler ---
 export default async function handler(req: Request): Promise<Response> {
-  if (req.method === 'OPTIONS') return new Response('ok', { status: 200, headers: CORS });
-
-  const url = getUrl(req);
-  const tenantFromQuery = url.searchParams.get('tenant') || undefined;
-  const mode = url.searchParams.get('mode') || '';
-
-  if (req.method === 'GET') {
-    if (mode === 'selftest') {
-      const tenant = sanitizeTenant(tenantFromQuery);
-      if (!GH_OWNER || !GH_REPO || !GH_TOKEN) {
-        return err(500, 'missing-github-config', {
-          GITHUB_OWNER: !!GH_OWNER,
-          GITHUB_REPO:  !!GH_REPO,
-          GITHUB_TOKEN: !!GH_TOKEN,
-        });
-      }
-      const usersPath = `data/${tenant}/users.json`;
-      const { data, sha } = await readUsers(usersPath);
-      return ok({ tenant, usersPath, sha: sha || null, snapshot: data });
-    }
-    return err(405, 'method-not-allowed');
-  }
-
-  // POST
-  if (req.method !== 'POST') return err(405, 'method-not-allowed');
-  if (!requireSecret(req)) return err(401, 'unauthorized');
-
-  if (!GH_OWNER || !GH_REPO || !GH_TOKEN) {
-    return err(500, 'missing-github-config', {
-      GITHUB_OWNER: !!GH_OWNER,
-      GITHUB_REPO:  !!GH_REPO,
-      GITHUB_TOKEN: !!GH_TOKEN,
-    });
-  }
-
-  let body: any;
   try {
-    body = await readJsonBody(req);
-  } catch {
-    return err(400, 'invalid-json');
+    requireEnv();
+
+    const { searchParams } = new URL(req.url);
+    const tenant = (searchParams.get('tenant') || '').trim();
+    if (!tenant) return jsonRes(400, { ok: false, error: 'tenant missing' });
+
+    // Allow a quick GET check
+    if (req.method === 'GET' && searchParams.get('mode') === 'selftest') {
+      return jsonRes(200, { ok: true, tenant, env: {
+        GITHUB_OWNER_present: !!GH_OWNER,
+        GITHUB_REPO_present: !!GH_REPO,
+        GITHUB_TOKEN_present: !!GH_TOKEN,
+      }});
+    }
+
+    if (req.method !== 'POST') return jsonRes(405, { ok: false, error: 'POST required' });
+
+    // Auth
+    try { requireSecret(req); } catch { return jsonRes(403, { ok: false, error: 'forbidden' }); }
+
+    // Payload
+    let body: any = {};
+    try { body = await req.json(); } catch {}
+    const username = (body?.username || '').trim();
+    const password = (body?.password || '').trim();
+    if (!username || !password) return jsonRes(400, { ok: false, error: 'username/password missing' });
+
+    const filePath = pathFor(tenant);
+    const { data: map, sha } = await readJsonFromRepo(filePath, {});
+    (map as any)[username] = password;
+    await writeJsonToRepo(filePath, map, sha, `[qr-menu] set password for ${username}`);
+
+    return jsonRes(200, { ok: true, tenant, user: username });
+  } catch (e: any) {
+    return jsonRes(500, { ok: false, error: String(e?.message || e) });
   }
-
-  const tenant   = sanitizeTenant(body?.tenant || tenantFromQuery);
-  const username = (body?.username || '').toString().trim();
-  const password = (body?.password || '').toString();
-
-  if (!username || !password) return err(400, 'missing-username-or-password');
-
-  const usersPath = `data/${tenant}/users.json`;
-  const { data: users, sha } = await readUsers(usersPath);
-  // Harden against legacy files that may not have a 'passwords' object yet
-  if (!users || typeof users !== 'object') {
-    return err(500, 'users-json-invalid');
-  }
-  if (!('passwords' in users) || typeof (users as any).passwords !== 'object' || (users as any).passwords === null) {
-    (users as any).passwords = {};
-  }
-
-  if (!users.allowed.includes(username)) {
-    return err(403, 'not-allowed');
-  }
-
-  // NOTE: no hashing here — caller can provide already-hashed if desired
-  users.passwords[username] = password;
-
-  await ghPutJson(usersPath, users, sha, `set password for ${username} (tenant: ${tenant})`);
-  return ok({ tenant, username, changed: true });
 }
