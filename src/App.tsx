@@ -60,7 +60,71 @@ const ADMIN_PASSWORD = "admin123"; // Demo-Passwort – später ersetzen
 const ALLOWED_USERS_KEY = "qrmenu.allowed.users";
 const PENDING_USERS_KEY = "qrmenu.pending.users";
 const PASSWORDS_KEY = "qrmenu.passwords";
-// -------- User-Store-Helpers --------
+
+// --- Server API helpers for user management (sync across devices) ---
+const ADMIN_SECRET = (import.meta as any).env.VITE_ADMIN_SECRET || "";
+
+type UsersResponse = {
+  ok: boolean;
+  allowed: string[];
+  pending: Record<string, string>;
+  passwords?: Record<string, string>;
+};
+
+async function apiUsersGet(tenant: string, includePasswords = false): Promise<UsersResponse> {
+  const headers: Record<string, string> = {};
+  if (includePasswords && ADMIN_SECRET) headers["x-admin-secret"] = ADMIN_SECRET;
+  const r = await fetch(`/api/users?tenant=${encodeURIComponent(tenant)}`, { headers, cache: "no-store" });
+  if (!r.ok) return { ok: false, allowed: ["admin"], pending: {} };
+  return r.json();
+}
+async function serverRegister(username: string, password: string) {
+  const tenant = getTenantKey();
+  const r = await fetch("/api/users-register", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tenant, username, password }),
+  });
+  if (!r.ok) throw new Error(await r.text());
+}
+async function serverApprove(username: string) {
+  const tenant = getTenantKey();
+  const r = await fetch("/api/users-approve", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-admin-secret": ADMIN_SECRET },
+    body: JSON.stringify({ tenant, username }),
+  });
+  if (!r.ok) throw new Error(await r.text());
+}
+async function serverReject(username: string) {
+  const tenant = getTenantKey();
+  const r = await fetch("/api/users-reject", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-admin-secret": ADMIN_SECRET },
+    body: JSON.stringify({ tenant, username }),
+  });
+  if (!r.ok) throw new Error(await r.text());
+}
+async function serverSetPassword(username: string, password: string) {
+  const tenant = getTenantKey();
+  const r = await fetch("/api/users-set-password", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-admin-secret": ADMIN_SECRET },
+    body: JSON.stringify({ tenant, username, password }),
+  });
+  if (!r.ok) throw new Error(await r.text());
+}
+async function serverDeleteUser(username: string) {
+  const tenant = getTenantKey();
+  const r = await fetch("/api/users-delete", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-admin-secret": ADMIN_SECRET },
+    body: JSON.stringify({ tenant, username }),
+  });
+  if (!r.ok) throw new Error(await r.text());
+}
+
+// -------- User-Store-Helpers (legacy local) --------
 function loadAllowedUsers(): string[] {
   try {
     const raw = localStorage.getItem(ALLOWED_USERS_KEY);
@@ -191,7 +255,6 @@ const Editor: React.FC<EditorProps> = ({ open, item, menu, onClose, onSave }) =>
                 if (!file) return;
                 const reader = new FileReader();
                 reader.onload = () => {
-                  // Speichere Base64-DataURL direkt ins img-Feld
                   setDraft({ ...draft, img: String(reader.result) });
                 };
                 reader.readAsDataURL(file);
@@ -293,7 +356,7 @@ function PublicApp() {
     if (!container) return;
     const el = container.querySelector<HTMLButtonElement>(`[data-cat="${CSS.escape(cat)}"]`);
     if (!el) return;
-    const pad = 8; // small left padding so it doesn't touch the edge
+    const pad = 8;
     const target = Math.max(0, el.offsetLeft - container.offsetLeft - pad);
     container.scrollTo({ left: target, behavior: 'smooth' });
   }
@@ -302,7 +365,7 @@ function PublicApp() {
   function scrollToCategory(targetCat: string) {
     const el = sectionRefs.current[targetCat];
     if (!el) return;
-    const toolbarH = (toolbarRef.current?.offsetHeight || 0); // only toolbar height
+    const toolbarH = (toolbarRef.current?.offsetHeight || 0);
     const y = el.getBoundingClientRect().top + window.scrollY - toolbarH - 8;
     window.scrollTo({ top: y, behavior: 'smooth' });
   }
@@ -320,7 +383,6 @@ function PublicApp() {
     const first = categories[0];
     if (!cat && first) {
       setCat(first);
-      // wichtig: initial kein Filter aktiv
       setFilterOn(false);
       setTimeout(() => alignActiveCatLeft(), 80);
     }
@@ -336,18 +398,18 @@ function PublicApp() {
     return categories.map(c => ({ cat: c, items: map[c] || [] }));
   }, [menu, categories, search]);
 
-  // Scroll listener: bestimmt die aktive Kategorie exakt an der "oberen Kante"
+  // Scroll listener: aktive Kategorie bestimmen
   useEffect(() => {
     if (!categories.length) return;
     const handler = () => {
-      const toolbarH = (toolbarRef.current?.offsetHeight || 0); // only toolbar height (header scrolls away)
-      const y = window.scrollY + toolbarH + 8; // Referenzlinie knapp unter der Toolbar
+      const toolbarH = (toolbarRef.current?.offsetHeight || 0);
+      const y = window.scrollY + toolbarH + 8;
       let bestCat: string | null = null;
       let bestDist = Infinity;
       for (const c of categories) {
         const el = sectionRefs.current[c];
         if (!el) continue;
-        const top = el.offsetTop; // absoluter Abstand vom Dokumentanfang
+        const top = el.offsetTop;
         if (y >= top) {
           const d = y - top;
           if (d < bestDist) {
@@ -356,12 +418,10 @@ function PublicApp() {
           }
         }
       }
-      // Falls wir oberhalb der ersten Sektion sind, nimm die erste
       if (!bestCat && categories[0]) bestCat = categories[0];
       if (bestCat && bestCat !== cat) setCat(bestCat);
     };
     window.addEventListener('scroll', handler, { passive: true });
-    // Initial ausführen, damit beim Laden sofort die korrekte Kategorie aktiv ist
     handler();
     return () => window.removeEventListener('scroll', handler);
   }, [categories, cat]);
@@ -373,8 +433,8 @@ function PublicApp() {
   const [regError, setRegError] = useState<string | null>(null);
   const [regDone, setRegDone] = useState(false);
 
-  // --- Login Modal Handler ---
-  function handleLoginSubmit(e: React.FormEvent) {
+  // --- Login Modal Handler (Server) ---
+  async function handleLoginSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoginError(null);
     const username = loginUsername.trim();
@@ -383,30 +443,35 @@ function PublicApp() {
       setLoginError("Bitte Benutzername und Passwort eingeben.");
       return;
     }
-    const allowed = loadAllowedUsers();
-    if (!allowed.includes(username)) {
-      setLoginError("Unbekannter Benutzer.");
-      return;
+    try {
+      const t = getTenantKey();
+      const j = await apiUsersGet(t, true);
+      const allowed = j.allowed || ["admin"];
+      if (!allowed.includes(username)) {
+        setLoginError("Unbekannter Benutzer.");
+        return;
+      }
+      const pwMap = (j.passwords || {}) as Record<string, string>;
+      let stored = pwMap[username];
+      if (!stored && username === "admin") stored = ADMIN_PASSWORD;
+      if (!stored) {
+        setLoginError("Kein Passwort gesetzt.");
+        return;
+      }
+      if (password !== stored) {
+        setLoginError("Falsches Passwort.");
+        return;
+      }
+      sessionStorage.setItem(ADMIN_TOKEN_KEY, "1");
+      sessionStorage.setItem(ADMIN_USER_KEY, username);
+      setLoginOpen(false);
+      setLoginUsername("");
+      setLoginPassword("");
+      setLoginError(null);
+      window.location.hash = "/admin";
+    } catch {
+      setLoginError("Login fehlgeschlagen.");
     }
-    const map = loadPasswords();
-    let stored = map[username];
-    if (!stored && username === "admin") stored = ADMIN_PASSWORD;
-    if (!stored) {
-      setLoginError("Kein Passwort gesetzt.");
-      return;
-    }
-    if (password !== stored) {
-      setLoginError("Falsches Passwort.");
-      return;
-    }
-    // Success: set session, close modal, redirect
-    sessionStorage.setItem(ADMIN_TOKEN_KEY, "1");
-    sessionStorage.setItem(ADMIN_USER_KEY, username);
-    setLoginOpen(false);
-    setLoginUsername("");
-    setLoginPassword("");
-    setLoginError(null);
-    window.location.hash = "/admin";
   }
 
   return (
@@ -487,20 +552,19 @@ function PublicApp() {
             </div>
             <form
               className="p-4 grid gap-3"
-              onSubmit={(e) => {
+              onSubmit={async (e) => {
                 e.preventDefault();
                 setRegError(null);
                 const u = regUsername.trim();
                 const p = regPassword;
                 if (!u || !p) { setRegError("Bitte Benutzername und Passwort eingeben."); return; }
                 if (u.toLowerCase() === "admin") { setRegError("Dieser Benutzername ist reserviert."); return; }
-                const allowed = loadAllowedUsers();
-                const pending = loadPendingUsers();
-                if (allowed.includes(u)) { setRegError("Benutzer existiert bereits."); return; }
-                if (pending[u]) { setRegError("Es liegt bereits eine Anfrage vor."); return; }
-                pending[u] = p;
-                savePendingUsers(pending);
-                setRegDone(true);
+                try {
+                  await serverRegister(u, p);
+                  setRegDone(true);
+                } catch {
+                  setRegError("Antrag konnte nicht gesendet werden.");
+                }
               }}
             >
               {!regDone ? (
@@ -609,7 +673,7 @@ function PublicApp() {
               </div>
             </div>
 
-            {/* Vollbild-Overlay mit Kategorienliste (ähnlich dem Screenshot) */}
+            {/* Vollbild-Overlay mit Kategorienliste */}
             {navOpen && (
               <div className="fixed inset-0 z-50">
                 <div className="absolute inset-0 bg-black/40" onClick={() => setNavOpen(false)} />
@@ -677,12 +741,12 @@ function PublicApp() {
 
 /* ---------- Admin-Bereich unter /admin ---------- */
 function AdminApp() {
-  // --- Pending Users State ---
-  const [pendingUsers, setPendingUsers] = useState<Record<string,string>>(() => loadPendingUsers());
+  // --- Pending/Users vom Server laden ---
+  const [pendingUsers, setPendingUsers] = useState<Record<string,string>>({});
   const [pendingOpen, setPendingOpen] = useState(false);
-  // Approved users (Benutzerverwaltung)
-  const [usersList, setUsersList] = useState<string[]>(() => loadAllowedUsers());
+  const [usersList, setUsersList] = useState<string[]>([]);
   const [usersOpen, setUsersOpen] = useState(false);
+
   const [menu, setMenu] = useState<MenuItem[] | null>(null);
   const [cat, setCat] = useState("");
   const [search, setSearch] = useState("");
@@ -697,6 +761,7 @@ function AdminApp() {
   });
   const currentUser = (typeof window !== "undefined" ? sessionStorage.getItem(ADMIN_USER_KEY) : null) || username || "";
   const isSuperAdmin = currentUser === "admin";
+
   // --- Toolbar/Category Scroll State ---
   const [navOpen, setNavOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -738,8 +803,7 @@ function AdminApp() {
     window.scrollTo({ top: y, behavior: 'smooth' });
   }
 
-  // --- Autosave Setup ---
-  const ADMIN_SECRET = (import.meta as any).env.VITE_ADMIN_SECRET || "";
+  // --- Autosave Setup (ohne doppeltes ADMIN_SECRET) ---
   const TENANT = getTenantKey();
 
   const savingRef = useRef(false);
@@ -778,6 +842,11 @@ function AdminApp() {
 
   useEffect(() => { document.title = BRAND_TITLE + " – Admin"; }, []);
   useEffect(() => {
+    (async () => {
+      const j = await apiUsersGet(getTenantKey());
+      setUsersList(j.allowed || []);
+      setPendingUsers(j.pending || {});
+    })();
     const tenant = getTenantKey();
     fetchMenu(tenant).then(setMenu);
   }, []);
@@ -804,18 +873,18 @@ function AdminApp() {
     return categories.map(c => ({ cat: c, items: map[c] || [] }));
   }, [menu, categories, search]);
 
-  // Scroll listener: bestimmt die aktive Kategorie exakt an der "oberen Kante"
+  // Scroll listener
   useEffect(() => {
     if (!categories.length) return;
     const handler = () => {
-      const toolbarH = (toolbarRef.current?.offsetHeight || 0) + headerH; // sticky header + Toolbar (fixed)
-      const y = window.scrollY + toolbarH + 8; // Referenzlinie knapp unter der Toolbar
+      const toolbarH = (toolbarRef.current?.offsetHeight || 0) + headerH;
+      const y = window.scrollY + toolbarH + 8;
       let bestCat: string | null = null;
       let bestDist = Infinity;
       for (const c of categories) {
         const el = sectionRefs.current[c];
         if (!el) continue;
-        const top = el.offsetTop; // absoluter Abstand vom Dokumentanfang
+        const top = el.offsetTop;
         if (y >= top) {
           const d = y - top;
           if (d < bestDist) {
@@ -824,12 +893,10 @@ function AdminApp() {
           }
         }
       }
-      // Falls wir oberhalb der ersten Sektion sind, nimm die erste
       if (!bestCat && categories[0]) bestCat = categories[0];
       if (bestCat && bestCat !== cat) setCat(bestCat);
     };
     window.addEventListener('scroll', handler, { passive: true });
-    // Initial ausführen, damit beim Laden sofort die korrekte Kategorie aktiv ist
     handler();
     return () => window.removeEventListener('scroll', handler);
   }, [categories, cat, headerH]);
@@ -858,7 +925,6 @@ function AdminApp() {
     const newName = proposed ? proposed.trim() : "";
     if (!newName || newName === current) return;
     setMenu(prev => (prev ?? []).map(i => i.category === current ? { ...i, category: newName } : i));
-    // Wenn die aktuell ausgewählte Kategorie betroffen ist, umschalten
     if (cat === current) setCat(newName);
     scheduleAutosave();
   }
@@ -867,7 +933,6 @@ function AdminApp() {
   function deleteCategory(name: string) {
     const list = menu ?? [];
     const count = list.filter(i => i.category === name).length;
-    // Ziel-Kategorie ermitteln/abfragen
     const otherCats = categories.filter(c => c !== name);
     const fallback = otherCats[0] || "Sonstiges";
     let target = fallback;
@@ -875,18 +940,13 @@ function AdminApp() {
       const answer = prompt(`Es gibt ${count} Artikel in "${name}". In welche Kategorie verschieben? (leer = "${fallback}")`, fallback);
       target = (answer && answer.trim()) || fallback;
     }
-    // Artikel verschieben
     setMenu(prev => (prev ?? []).map(i => i.category === name ? { ...i, category: target } : i));
-    // Auswahl aktualisieren
     if (cat === name) setCat(target);
     setFilterOn(true);
     scheduleAutosave();
   }
 
-  // --- Kategorien-Reihenfolge ändern (wir ordnen das Menü-Array so um,
-  //     dass die erste Vorkommens-Reihenfolge der Kategorien dem neuen
-  //     Wunsch entspricht. Die Public-Ansicht übernimmt das automatisch,
-  //     weil sie die Kategorien in dieser Reihenfolge ableitet.)
+  // Kategorien-Reihenfolge anpassen
   function reorderMenuByCategories(newOrder: string[]) {
     setMenu(prev => {
       const list = prev ?? [];
@@ -901,7 +961,6 @@ function AdminApp() {
           delete bucket[c];
         }
       }
-      // übrige Kategorien (falls vorhanden) hinten anhängen
       for (const rest of Object.keys(bucket)) {
         result.push(...bucket[rest]);
       }
@@ -909,24 +968,19 @@ function AdminApp() {
     });
     scheduleAutosave();
   }
-
-
   function moveCategoryByDnD(fromCat: string, toCat: string) {
     if (!fromCat || !toCat || fromCat === toCat) return;
     const order = [...categories];
     const from = order.indexOf(fromCat);
     const to = order.indexOf(toCat);
     if (from < 0 || to < 0 || from === to) return;
-    // splice-move
     order.splice(to, 0, order.splice(from, 1)[0]);
     reorderMenuByCategories(order);
     setCat(fromCat);
   }
 
-
   function login(e: React.FormEvent) {
     e.preventDefault();
-    // For legacy: allow admin login via direct password entry (no username)
     if (password === ADMIN_PASSWORD) {
       sessionStorage.setItem(ADMIN_TOKEN_KEY, '1');
       sessionStorage.setItem(ADMIN_USER_KEY, "admin");
@@ -944,8 +998,8 @@ function AdminApp() {
     window.location.hash = "/";
   }
 
-  // Change password for current user
-  function changePassword() {
+  // Passwort ändern (Server)
+  async function changePassword() {
     const currentUser = sessionStorage.getItem(ADMIN_USER_KEY) || username;
     if (!currentUser) {
       alert("Kein Benutzer angemeldet.");
@@ -958,14 +1012,12 @@ function AdminApp() {
       alert("Passwörter stimmen nicht überein.");
       return;
     }
-    const map = loadPasswords();
-    map[currentUser] = pw1;
-    savePasswords(map);
+    await serverSetPassword(currentUser, pw1);
     alert("Passwort erfolgreich geändert.");
   }
 
-  // User management helpers
-  function resetPasswordFor(targetUser: string) {
+  // User management helpers (Server)
+  async function resetPasswordFor(targetUser: string) {
     const pw1 = prompt(`Neues Passwort für "${targetUser}" eingeben:`);
     if (!pw1) return;
     const pw2 = prompt("Neues Passwort wiederholen:");
@@ -973,23 +1025,18 @@ function AdminApp() {
       alert("Passwörter stimmen nicht überein.");
       return;
     }
-    const map = loadPasswords();
-    map[targetUser] = pw1;
-    savePasswords(map);
+    await serverSetPassword(targetUser, pw1);
     alert(`Passwort für "${targetUser}" geändert.`);
   }
 
-  function deleteUser(targetUser: string) {
+  async function deleteUser(targetUser: string) {
     const currentUser = sessionStorage.getItem(ADMIN_USER_KEY) || username;
     if (targetUser === "admin") { alert("Der Benutzer 'admin' kann nicht gelöscht werden."); return; }
     if (targetUser === currentUser) { alert("Du kannst den aktuell angemeldeten Benutzer nicht löschen."); return; }
     if (!confirm(`Benutzer "${targetUser}" wirklich löschen?`)) return;
-    const allowed = loadAllowedUsers().filter(u => u !== targetUser);
-    saveAllowedUsers(allowed);
-    const map = loadPasswords();
-    delete map[targetUser];
-    savePasswords(map);
-    setUsersList(allowed);
+    await serverDeleteUser(targetUser);
+    const j = await apiUsersGet(getTenantKey());
+    setUsersList(j.allowed || []);
   }
 
   if (!authed) {
@@ -1017,19 +1064,26 @@ function AdminApp() {
             <span className="text-sm text-neutral-600">– Admin</span>
           </div>
           <div className="flex items-center gap-3">
-            {/* Only show these sections for super admin */}
             {isSuperAdmin && (
               <>
                 <Button
                   className="rounded-full border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-100 active:bg-neutral-200"
-                  onClick={() => { setUsersList(loadAllowedUsers()); setUsersOpen(true); }}
+                  onClick={async () => {
+                    const j = await apiUsersGet(getTenantKey());
+                    setUsersList(j.allowed || []);
+                    setUsersOpen(true);
+                  }}
                   pill
                 >
                   Benutzer ({usersList.length})
                 </Button>
                 <Button
                   className="rounded-full border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-100 active:bg-neutral-200"
-                  onClick={() => { setPendingUsers(loadPendingUsers()); setPendingOpen(true); }}
+                  onClick={async () => {
+                    const j = await apiUsersGet(getTenantKey());
+                    setPendingUsers(j.pending || {});
+                    setPendingOpen(true);
+                  }}
                   pill
                 >
                   Anträge ({Object.keys(pendingUsers || {}).length})
@@ -1048,13 +1102,19 @@ function AdminApp() {
             </Button>
             <Button
               className="rounded-full border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-100 active:bg-neutral-200"
-              onClick={logout}
+              onClick={() => {
+                sessionStorage.removeItem(ADMIN_TOKEN_KEY);
+                sessionStorage.removeItem(ADMIN_USER_KEY);
+                setAuthed(false);
+                setUsername("");
+                window.location.hash = "/";
+              }}
               pill
             >
               Logout
             </Button>
           </div>
-          {/* Benutzerverwaltung modal: only for super admin */}
+          {/* Benutzerverwaltung modal */}
           {isSuperAdmin && usersOpen && (
             <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center">
               <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
@@ -1101,31 +1161,6 @@ function AdminApp() {
         <div className="border-t">
           <div className="max-w-5xl mx-auto p-3 flex flex-wrap items-center gap-2">
             <PrimaryBtn onClick={addItem}>+ Neuer Artikel</PrimaryBtn>
-            {/* 
-            <Button onClick={() => {
-              const blob = new Blob([JSON.stringify(menu ?? [], null, 2)], { type: "application/json" });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement("a");
-              a.href = url; a.download = "menu-export.json"; a.click(); URL.revokeObjectURL(url);
-            }}>Export JSON</Button>
-            <label className="inline-flex items-center gap-2 cursor-pointer">
-              <input type="file" accept="application/json" className="hidden" onChange={(ev) => {
-                const file = ev.target.files?.[0];
-                if (!file) return; const reader = new FileReader();
-                reader.onload = () => {
-                  try {
-                    const parsed = JSON.parse(String(reader.result));
-                    if (!Array.isArray(parsed)) throw new Error("Format ungültig");
-                    setMenu(parsed);
-                    alert("Import erfolgreich. Nicht vergessen: Speichern (Deploy) klicken.");
-                  } catch (e:any) { alert("Konnte Datei nicht importieren: " + e.message); }
-                  finally { ev.target.value = ""; }
-                };
-                reader.readAsText(file);
-              }} />
-              <span className="inline-flex items-center rounded-md border border-neutral-300 px-3 py-2 text-sm">Import JSON</span>
-            </label>
-            */}
             <span className="text-xs text-neutral-500">Änderungen werden automatisch gespeichert.</span>
           </div>
         </div>
@@ -1228,7 +1263,6 @@ function AdminApp() {
                         onDragStart={(e) => {
                           setDragCat(c);
                           e.dataTransfer.effectAllowed = "move";
-                          // Firefox needs data
                           e.dataTransfer.setData("text/plain", c);
                         }}
                         onDragOver={(e) => {
@@ -1326,7 +1360,7 @@ function AdminApp() {
         © {new Date().getFullYear()} QR-Speisekarte Urixsoft
       </footer>
 
-      {/* Anträge modal: only for super admin */}
+      {/* Anträge modal */}
       {isSuperAdmin && pendingOpen && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center">
           <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
@@ -1338,25 +1372,17 @@ function AdminApp() {
               {Object.keys(pendingUsers).length === 0 ? (
                 <div className="p-3 text-sm text-neutral-500">Keine Anträge vorhanden.</div>
               ) : (
-                Object.entries(pendingUsers).map(([u, pwd]) => (
+                Object.entries(pendingUsers).map(([u]) => (
                   <div key={u} className="flex items-center justify-between border-b px-3 py-2">
                     <div className="font-medium">{u}</div>
                     <div className="flex items-center gap-2">
                       <Button
                         className="rounded-full px-3 py-1 text-sm"
-                        onClick={() => {
-                          // approve
-                          const allowed = loadAllowedUsers();
-                          if (!allowed.includes(u)) {
-                            allowed.push(u);
-                            saveAllowedUsers(allowed);
-                          }
-                          const pwMap = loadPasswords();
-                          pwMap[u] = pwd;
-                          savePasswords(pwMap);
-                          const next = { ...pendingUsers }; delete next[u];
-                          savePendingUsers(next);
-                          setPendingUsers(next);
+                        onClick={async () => {
+                          await serverApprove(u);
+                          const j = await apiUsersGet(getTenantKey());
+                          setUsersList(j.allowed || []);
+                          setPendingUsers(j.pending || {});
                         }}
                         pill
                       >
@@ -1364,10 +1390,10 @@ function AdminApp() {
                       </Button>
                       <Button
                         className="rounded-full px-3 py-1 text-sm text-red-600 border-red-300 hover:bg-red-50"
-                        onClick={() => {
-                          const next = { ...pendingUsers }; delete next[u];
-                          savePendingUsers(next);
-                          setPendingUsers(next);
+                        onClick={async () => {
+                          await serverReject(u);
+                          const j = await apiUsersGet(getTenantKey());
+                          setPendingUsers(j.pending || {});
                         }}
                         pill
                       >
@@ -1399,7 +1425,6 @@ function AdminApp() {
 
 /* ---------- sehr einfacher Router: /admin -> AdminApp, sonst Public ---------- */
 export default function App() {
-  // Simple reactive hash router (#/admin etc.)
   const [route, setRoute] = React.useState<string>(() => {
     if (typeof window === "undefined") return "/";
     return window.location.hash?.slice(1) || "/";
