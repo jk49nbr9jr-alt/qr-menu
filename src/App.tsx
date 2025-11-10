@@ -770,8 +770,6 @@ function AdminApp() {
   const [newPw, setNewPw] = useState("");
   const [confirmPw, setConfirmPw] = useState("");
   const [pwError, setPwError] = useState<string | null>(null);
-  // Mobile menu (hamburger) state
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // --- Notification State ---
   const [notify, setNotify] = useState<{ msg: string; type?: "info" | "error" | "success" } | null>(null);
@@ -1014,6 +1012,38 @@ function AdminApp() {
     setPasswordModalOpen(true);
   }
 
+  // User management helpers (Server)
+  async function resetPasswordFor(targetUser: string) {
+    const pw1 = prompt(`Neues Passwort für "${targetUser}" eingeben:`);
+    if (!pw1) return;
+    const pw2 = prompt("Neues Passwort wiederholen:");
+    if (pw1 !== pw2) {
+      alert("Passwörter stimmen nicht überein.");
+      return;
+    }
+    try {
+      await serverSetPassword(targetUser, pw1);
+      showNotify(`"${targetUser}" Passwort geändert.`, "success");
+    } catch (err: any) {
+      showNotify(`Passwort konnte für "${targetUser}" nicht gesetzt werden.`, "error");
+      console.error("[reset-password] failed:", err);
+    }
+  }
+
+  async function deleteUser(targetUser: string) {
+    const currentUser = sessionStorage.getItem(ADMIN_USER_KEY) || username;
+    if (targetUser === "admin") { alert("Der Benutzer 'admin' kann nicht gelöscht werden."); return; }
+    if (targetUser === currentUser) { alert("Du kannst den aktuell angemeldeten Benutzer nicht löschen."); return; }
+    if (!confirm(`Benutzer "${targetUser}" wirklich löschen?`)) return;
+    try {
+      await serverDeleteUser(targetUser);
+      const j = await apiUsersGet(getTenantKey());
+      setUsersList(j.allowed || []);
+    } catch (err: any) {
+      showNotify(`Benutzer "${targetUser}" konnte nicht gelöscht werden.`, "error");
+      console.error("[users-delete] failed:", err);
+    }
+  }
 
   if (!authed) {
     return (
@@ -1034,136 +1064,106 @@ function AdminApp() {
   return (
     <div className="min-h-screen bg-neutral-50 text-neutral-900">
       <header ref={headerRef} className="fixed top-0 left-0 right-0 z-50 bg-white border-b">
-        <div className="max-w-5xl mx-auto w-full p-3 sm:p-4">
-          {/* Mobile: centered logo + hamburger on the right */}
-          <div className="sm:hidden grid grid-cols-3 items-center">
-            <div />
-            <div className="flex items-center justify-center">
-              <img src={LOGO_SRC} alt={BRAND_TITLE} className="h-7 w-auto" />
-              <span className="sr-only">{BRAND_TITLE}</span>
-            </div>
-            <div className="flex items-center justify-end">
-              <Button className="rounded-full w-10 h-10" onClick={() => setMobileMenuOpen(true)}>≡</Button>
-            </div>
+        <div className="max-w-5xl mx-auto flex justify-between items-center p-4">
+          <div className="flex items-center gap-3">
+            <img src={LOGO_SRC} alt={BRAND_TITLE} className="h-7 sm:h-8 w-auto" />
+            <span className="text-sm text-neutral-600">– Admin</span>
           </div>
-
-          {/* Desktop: logo left + actions right */}
-          <div className="hidden sm:flex justify-between items-center">
-            <div className="flex items-center gap-3">
-              <img src={LOGO_SRC} alt={BRAND_TITLE} className="h-7 sm:h-8 w-auto" />
-              <span className="hidden sm:inline text-sm text-neutral-600">– Admin</span>
-            </div>
-            <div className="flex items-center gap-3">
-              {isSuperAdmin && (
-                <>
-                  <Button
-                    className="rounded-full border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-100 active:bg-neutral-200"
-                    onClick={async () => {
-                      const j = await apiUsersGet(getTenantKey());
-                      setUsersList(j.allowed || []);
-                      setUsersOpen(true);
-                    }}
-                    pill
-                  >
-                    Benutzer ({usersList.length})
-                  </Button>
-                  <Button
-                    className="rounded-full border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-100 active:bg-neutral-200"
-                    onClick={async () => {
-                      const j = await apiUsersGet(getTenantKey());
-                      setPendingUsers(j.pending || {});
-                      setPendingOpen(true);
-                    }}
-                    pill
-                  >
-                    Anträge ({Object.keys(pendingUsers || {}).length})
-                  </Button>
-                </>
-              )}
-              <span className="text-sm text-neutral-700">
-                {sessionStorage.getItem(ADMIN_USER_KEY) || username || "admin"}
-              </span>
-              <Button
-                className="rounded-full border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-100 active:bg-neutral-200"
-                onClick={changePassword}
-                pill
-              >
-                Passwort ändern
-              </Button>
-              <Button
-                className="rounded-full border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-100 active:bg-neutral-200"
-                onClick={() => {
-                  sessionStorage.removeItem(ADMIN_TOKEN_KEY);
-                  sessionStorage.removeItem(ADMIN_USER_KEY);
-                  setAuthed(false);
-                  setUsername("");
-                  window.location.hash = "/";
-                }}
-                pill
-              >
-                Logout
-              </Button>
-            </div>
-          </div>
-        </div>
-
-        {/* Mobile slide-over menu */}
-        {mobileMenuOpen && (
-          <div className="sm:hidden fixed inset-0 z-50">
-            <div className="absolute inset-0 bg-black/40" onClick={() => setMobileMenuOpen(false)} />
-            <div className="absolute left-0 right-0 top-0 mx-auto max-w-md bg-white/95 backdrop-blur rounded-b-2xl shadow-xl">
-              <div className="flex items-center justify-between p-4 border-b">
-                <div className="text-lg font-semibold">Menü</div>
-                <Button className="rounded-full w-10 h-10" onClick={() => setMobileMenuOpen(false)}>×</Button>
-              </div>
-              <div className="p-3">
-                {isSuperAdmin && (
-                  <>
-                    <Button
-                      pill
-                      className="w-full mb-2"
-                      onClick={async () => {
-                        const j = await apiUsersGet(getTenantKey());
-                        setUsersList(j.allowed || []);
-                        setUsersOpen(true);
-                        setMobileMenuOpen(false);
-                      }}
-                    >
-                      Benutzer ({usersList.length})
-                    </Button>
-                    <Button
-                      pill
-                      className="w-full mb-2"
-                      onClick={async () => {
-                        const j = await apiUsersGet(getTenantKey());
-                        setPendingUsers(j.pending || {});
-                        setPendingOpen(true);
-                        setMobileMenuOpen(false);
-                      }}
-                    >
-                      Anträge ({Object.keys(pendingUsers || {}).length})
-                    </Button>
-                  </>
-                )}
-                <Button pill className="w-full mb-2" onClick={() => { setMobileMenuOpen(false); changePassword(); }}>Passwort ändern</Button>
+          <div className="flex items-center gap-3">
+            {isSuperAdmin && (
+              <>
                 <Button
-                  pill
-                  className="w-full"
-                  onClick={() => {
-                    sessionStorage.removeItem(ADMIN_TOKEN_KEY);
-                    sessionStorage.removeItem(ADMIN_USER_KEY);
-                    setAuthed(false);
-                    setUsername("");
-                    window.location.hash = "/";
+                  className="rounded-full border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-100 active:bg-neutral-200"
+                  onClick={async () => {
+                    const j = await apiUsersGet(getTenantKey());
+                    setUsersList(j.allowed || []);
+                    setUsersOpen(true);
                   }}
+                  pill
                 >
-                  Logout
+                  Benutzer ({usersList.length})
                 </Button>
+                <Button
+                  className="rounded-full border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-100 active:bg-neutral-200"
+                  onClick={async () => {
+                    const j = await apiUsersGet(getTenantKey());
+                    setPendingUsers(j.pending || {});
+                    setPendingOpen(true);
+                  }}
+                  pill
+                >
+                  Anträge ({Object.keys(pendingUsers || {}).length})
+                </Button>
+              </>
+            )}
+            <span className="text-sm text-neutral-700">
+              {sessionStorage.getItem(ADMIN_USER_KEY) || username || "admin"}
+            </span>
+            <Button
+              className="rounded-full border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-100 active:bg-neutral-200"
+              onClick={changePassword}
+              pill
+            >
+              Passwort ändern
+            </Button>
+            <Button
+              className="rounded-full border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-100 active:bg-neutral-200"
+              onClick={() => {
+                sessionStorage.removeItem(ADMIN_TOKEN_KEY);
+                sessionStorage.removeItem(ADMIN_USER_KEY);
+                setAuthed(false);
+                setUsername("");
+                window.location.hash = "/";
+              }}
+              pill
+            >
+              Logout
+            </Button>
+          </div>
+          {/* Benutzerverwaltung modal */}
+          {isSuperAdmin && usersOpen && (
+            <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center">
+              <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
+                <div className="p-4 border-b flex items-center justify-between">
+                  <div className="font-semibold">Benutzerverwaltung</div>
+                  <Button onClick={() => setUsersOpen(false)}>Schließen</Button>
+                </div>
+                <div className="p-2 max-h-[70vh] overflow-auto">
+                  {usersList.length === 0 ? (
+                    <div className="p-3 text-sm text-neutral-500">Keine Benutzer vorhanden.</div>
+                  ) : (
+                    usersList.map((u) => (
+                      <div key={u} className="flex items-center justify-between border-b px-3 py-2">
+                        <div className="font-medium">
+                          {u}
+                          { (sessionStorage.getItem(ADMIN_USER_KEY) || username) === u ? <span className="ml-2 text-xs text-neutral-500">(angemeldet)</span> : null }
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            className="rounded-full px-3 py-1 text-sm"
+                            onClick={() => resetPasswordFor(u)}
+                            pill
+                          >
+                            Passwort zurücksetzen
+                          </Button>
+                          {u !== "admin" && (sessionStorage.getItem(ADMIN_USER_KEY) || username) !== u && (
+                            <Button
+                              className="rounded-full px-3 py-1 text-sm text-red-600 border-red-300 hover:bg-red-50"
+                              onClick={() => deleteUser(u)}
+                              pill
+                            >
+                              Löschen
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-        )}
-
+          )}
+        </div>
         <div className="border-t">
           <div className="max-w-5xl mx-auto p-3 flex flex-wrap items-center gap-2">
             <PrimaryBtn onClick={addItem}>+ Neuer Artikel</PrimaryBtn>
@@ -1437,29 +1437,6 @@ function AdminApp() {
                         Ablehnen
                       </Button>
                     </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Benutzer-Liste (nur Anzeige) */}
-      {isSuperAdmin && usersOpen && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center">
-          <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
-            <div className="p-4 border-b flex items-center justify-between">
-              <div className="font-semibold">Benutzer</div>
-              <Button onClick={() => setUsersOpen(false)}>Schließen</Button>
-            </div>
-            <div className="p-2 max-h-[70vh] overflow-auto">
-              {usersList.length === 0 ? (
-                <div className="p-3 text-sm text-neutral-500">Keine Benutzer gefunden.</div>
-              ) : (
-                usersList.map((u) => (
-                  <div key={u} className="flex items-center justify-between border-b px-3 py-2">
-                    <div className="font-medium">{u}</div>
                   </div>
                 ))
               )}
