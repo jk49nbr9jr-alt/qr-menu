@@ -30,6 +30,33 @@ function err(status: number, message: string, details?: any) {
   });
 }
 
+function getUrl(req: any): URL {
+  const raw = (req as any)?.url || '';
+  const host = headerGet(req as any, 'host') || 'localhost';
+  try {
+    return new URL(raw, `http://${host}`);
+  } catch {
+    // fallback (should never happen)
+    return new URL(`http://${host}/`);
+  }
+}
+
+async function readJsonBody(req: any): Promise<any> {
+  try {
+    if (typeof (req as any).json === 'function') {
+      return await (req as any).json();
+    }
+  } catch { /* fall through to stream read */ }
+
+  // Stream read (Node.js IncomingMessage)
+  const chunks: Uint8Array[] = [];
+  for await (const chunk of req as any) {
+    chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : Buffer.from(chunk));
+  }
+  const text = Buffer.concat(chunks).toString('utf8');
+  try { return JSON.parse(text); } catch { return {}; }
+}
+
 /** normalize tenant from body or query */
 function sanitizeTenant(input?: string) {
   const raw = (input || '').toString().trim().toLowerCase();
@@ -102,7 +129,7 @@ async function readUsers(path: string): Promise<{ data: UsersJson; sha: string |
 export default async function handler(req: Request): Promise<Response> {
   if (req.method === 'OPTIONS') return new Response('ok', { status: 200, headers: CORS });
 
-  const url = new URL(req.url);
+  const url = getUrl(req);
   const tenantFromQuery = url.searchParams.get('tenant') || undefined;
   const mode = url.searchParams.get('mode') || '';
 
@@ -137,7 +164,7 @@ export default async function handler(req: Request): Promise<Response> {
 
   let body: any;
   try {
-    body = await req.json();
+    body = await readJsonBody(req);
   } catch {
     return err(400, 'invalid-json');
   }
