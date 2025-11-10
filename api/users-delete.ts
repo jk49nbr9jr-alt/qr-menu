@@ -36,8 +36,24 @@ function sanitizeTenant(input?: string) {
   return clean || 'speisekarte';
 }
 
-function requireSecret(req: Request) {
-  const hdr = req.headers.get('x-admin-secret') || '';
+function headerGet(req: any, name: string): string {
+  const h = (req as any)?.headers;
+  if (!h) return '';
+  if (typeof (h as any).get === 'function') {
+    return ((h as any).get(name) as string) || '';
+  }
+  const key = name.toLowerCase();
+  for (const k of Object.keys(h)) {
+    if (k.toLowerCase() === key) {
+      const v: any = (h as any)[k];
+      return Array.isArray(v) ? (v[0] ?? '') : (v ?? '');
+    }
+  }
+  return '';
+}
+
+function requireSecret(req: any) {
+  const hdr = headerGet(req, 'x-admin-secret');
   const expected = process.env.VITE_ADMIN_SECRET || process.env.ADMIN_SECRET || '';
   return !!expected && hdr === expected;
 }
