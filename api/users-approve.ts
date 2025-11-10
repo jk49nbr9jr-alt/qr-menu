@@ -1,12 +1,16 @@
 export const config = { runtime: "nodejs" } as const;
 
 /**
- * Reject a pending user (delete from data/<tenant>/pending.json)
+ * Approve a pending user:
+ * - moves from data/<tenant>/pending.json to data/<tenant>/users.json
+ * - adds username to allowed[]
+ * - stores the pending password under passwords[username]
  * Body: { tenant?: string, username: string }
  * Requires x-admin-secret.
  */
 
 type GitHubFile = { content: string; sha: string; encoding: "base64" | string };
+type UsersJson   = { allowed?: string[]; passwords?: Record<string, string> };
 type PendingJson = Record<string, string>;
 
 const CORS = {
@@ -72,7 +76,7 @@ async function gh<T>(url: string, init?: RequestInit): Promise<T> {
   });
   if (!r.ok) {
     const text = await r.text().catch(() => "");
-    console.error("[users-reject] GitHub API error", r.status, text || r.statusText);
+    console.error("[users-approve] GitHub API error", r.status, text || r.statusText);
     throw new Error(`GitHub ${r.status}: ${text || r.statusText}`);
   }
   return (await r.json()) as T;
@@ -115,7 +119,7 @@ async function readJsonFromRepo<T>(path: string, fallback: T): Promise<{ data: T
       const parsed = JSON.parse(raw) as T;
       return { data: parsed, sha: f.sha };
     } catch (e) {
-      console.warn("[users-reject] parse error in", path, "-> using fallback, keeping sha");
+      console.warn("[users-approve] parse error in", path, "-> using fallback, keeping sha");
       return { data: fallback, sha: f.sha };
     }
   } catch {
@@ -196,18 +200,32 @@ export default async function handler(req: any) {
   const username = ((body?.username ?? url.searchParams.get("username") ?? "") as string).toString().trim();
   if (!username) return err(400, "username-required");
 
+  const usersPath   = `data/${tenant}/users.json`;
   const pendingPath = `data/${tenant}/pending.json`;
 
+  // read both files
+  const { data: users,   sha: usersSha }   = await readJsonFromRepo<UsersJson>(usersPath, { allowed: ["admin"], passwords: {} });
   const { data: pending, sha: pendingSha } = await readJsonFromRepo<PendingJson>(pendingPath, {});
-  if (!pending[username]) {
-    return err(404, "not-pending");
-  }
+  const pw = pending[username];
+  if (!pw) return err(404, "not-pending");
+
+  // update users
+  const allowedSet = new Set<string>([..."admin".split(","), ...(users.allowed || [])]); // ensure admin
+  allowedSet.add("admin");
+  allowedSet.add(username);
+  const nextUsers: UsersJson = {
+    allowed: Array.from(allowedSet),
+    passwords: { ...(users.passwords || {}), [username]: pw },
+  };
+
+  // remove from pending
   delete pending[username];
 
   try {
-    await ghPutJson(pendingPath, pending, pendingSha, `reject user ${username} (tenant: ${tenant})`);
-    return ok({ tenant, username, removed: true });
+    await ghPutJson(usersPath,   nextUsers, usersSha,   `approve user ${username} (tenant: ${tenant})`);
+    await ghPutJson(pendingPath, pending,   pendingSha, `remove pending ${username} (tenant: ${tenant})`);
+    return ok({ tenant, username, approved: true });
   } catch (e: any) {
-    return err(500, "reject-failed", { message: String(e?.message || e) });
+    return err(500, "approve-failed", { message: String(e?.message || e) });
   }
 }
