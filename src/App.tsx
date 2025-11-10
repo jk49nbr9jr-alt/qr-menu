@@ -1,22 +1,28 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
 /* ---------- kleine UI-Helpers (Tailwind) ---------- */
-type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & { className?: string };
+type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & { className?: string; pill?: boolean };
 type InputProps = React.InputHTMLAttributes<HTMLInputElement> & { className?: string };
 type DivProps = React.HTMLAttributes<HTMLDivElement> & { className?: string };
 
-const Button: React.FC<ButtonProps> = ({ className = "", ...props }) => (
-  <button
-    className={("inline-flex items-center justify-center gap-2 rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm hover:bg-neutral-100 active:bg-neutral-200 disabled:opacity-50 " + className).trim()}
-    {...props}
-  />
-);
-const PrimaryBtn: React.FC<ButtonProps> = ({ className = "", ...props }) => (
-  <button
-    className={("inline-flex items-center justify-center gap-2 rounded-md bg-black text-white px-3 py-2 text-sm hover:opacity-90 active:opacity-80 disabled:opacity-50 " + className).trim()}
-    {...props}
-  />
-);
+const Button: React.FC<ButtonProps> = ({ className = "", pill = false, ...props }) => {
+  const radius = pill ? "rounded-full" : "rounded-md";
+  return (
+    <button
+      className={("inline-flex items-center justify-center gap-2 " + radius + " border border-neutral-300 bg-white px-3 py-2 text-sm hover:bg-neutral-100 active:bg-neutral-200 disabled:opacity-50 " + className).trim()}
+      {...props}
+    />
+  );
+};
+const PrimaryBtn: React.FC<ButtonProps> = ({ className = "", pill = false, ...props }) => {
+  const radius = pill ? "rounded-full" : "rounded-md";
+  return (
+    <button
+      className={("inline-flex items-center justify-center gap-2 " + radius + " bg-black text-white px-3 py-2 text-sm hover:opacity-90 active:opacity-80 disabled:opacity-50 " + className).trim()}
+      {...props}
+    />
+  );
+};
 const Card: React.FC<DivProps> = ({ className = "", children, ...rest }) => (
   <div className={("rounded-xl border bg-white " + className).trim()} {...rest}>{children}</div>
 );
@@ -340,6 +346,7 @@ function PublicApp() {
             <Button
               className="rounded-full border border-neutral-300 px-6 py-2 text-sm hover:bg-neutral-100 active:bg-neutral-200"
               onClick={() => setLoginOpen(true)}
+              pill
             >
               Anmelden
             </Button>
@@ -787,12 +794,14 @@ function AdminApp() {
             <Button
               className="rounded-full border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-100 active:bg-neutral-200"
               onClick={changePassword}
+              pill
             >
               Passwort ändern
             </Button>
             <Button
               className="rounded-full border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-100 active:bg-neutral-200"
               onClick={logout}
+              pill
             >
               Logout
             </Button>
