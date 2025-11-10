@@ -379,17 +379,10 @@ function PublicApp() {
           <div className="flex items-center justify-end">
             <Button
               className="rounded-full border border-neutral-300 px-6 py-2 text-sm hover:bg-neutral-100 active:bg-neutral-200"
-              onClick={() => setLoginOpen(true)}
+              onClick={() => { setLoginOpen(true); setRegisterOpen(false); }}
               pill
             >
-              Anmelden
-            </Button>
-            <Button
-              className="ml-2 rounded-full border border-neutral-300 px-6 py-2 text-sm hover:bg-neutral-100 active:bg-neutral-200"
-              onClick={() => { setRegisterOpen(true); setRegError(null); setRegDone(false); }}
-              pill
-            >
-              Registrieren
+              Anmelden / Registrieren
             </Button>
           </div>
         </div>
@@ -427,6 +420,16 @@ function PublicApp() {
               <div className="flex items-center justify-end gap-2 pt-2">
                 <Button type="button" onClick={() => { setLoginOpen(false); setLoginError(null); }}>Abbrechen</Button>
                 <PrimaryBtn type="submit">Login</PrimaryBtn>
+              </div>
+              <div className="text-center text-xs text-neutral-500 pt-2">
+                Noch keinen Zugang?{" "}
+                <button
+                  type="button"
+                  className="underline text-amber-700 hover:text-amber-800"
+                  onClick={() => { setLoginOpen(false); setRegisterOpen(true); }}
+                >
+                  Registrieren
+                </button>
               </div>
             </form>
           </div>
