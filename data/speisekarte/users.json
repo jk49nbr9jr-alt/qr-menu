@@ -1,12 +1,6 @@
 {
   "allowed": [
     "admin",
-    "c",
-    "a"
-  ],
-  "passwords": {
-    "admin": "admin123",
-    "c": "c",
-    "a": "a"
-  }
+    "c"
+  ]
 }
