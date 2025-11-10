@@ -1395,10 +1395,19 @@ function AdminApp() {
                         className="rounded-full px-3 py-1 text-sm"
                         onClick={async () => {
                           try {
+                            // Optimistic UI: remove from local pending list immediately
+                            setPendingUsers(prev => {
+                              const next = { ...prev };
+                              delete next[u];
+                              return next;
+                            });
+
                             await serverApprove(u);
+
+                            // Refresh allowed users list (so header count updates etc.)
                             const j = await apiUsersGet(getTenantKey());
                             setUsersList(j.allowed || []);
-                            setPendingUsers(j.pending || {});
+
                             alert(`"${u}" freigegeben.`);
                           } catch (e: any) {
                             console.error(e);
@@ -1413,9 +1422,15 @@ function AdminApp() {
                         className="rounded-full px-3 py-1 text-sm text-red-600 border-red-300 hover:bg-red-50"
                         onClick={async () => {
                           try {
+                            // Optimistic UI: remove from local pending list immediately
+                            setPendingUsers(prev => {
+                              const next = { ...prev };
+                              delete next[u];
+                              return next;
+                            });
+
                             await serverReject(u);
-                            const j = await apiUsersGet(getTenantKey());
-                            setPendingUsers(j.pending || {});
+
                             alert(`"${u}" abgelehnt.`);
                           } catch (e: any) {
                             console.error(e);
