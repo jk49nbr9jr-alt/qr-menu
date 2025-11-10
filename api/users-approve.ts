@@ -124,10 +124,23 @@ async function ghPutFile(path: string, contentObj: unknown, sha: string | null, 
 async function readJsonFromRepo<T>(path: string, fallback: T): Promise<{ data: T; sha: string | null }> {
   try {
     const f = await ghGetFile(path);
-    const buf = Buffer.from(f.content, (f.encoding as BufferEncoding) || "base64");
-    const parsed = JSON.parse(buf.toString("utf8")) as T;
-    return { data: parsed, sha: f.sha };
+    try {
+      const buf = Buffer.from(f.content, (f.encoding as BufferEncoding) || "base64");
+      const raw = buf.toString("utf8").trim().replace(/^\uFEFF/, ""); // strip BOM
+      if (!raw) {
+        // file exists but is empty -> keep SHA so we can update it in-place
+        console.warn('[users-approve] readJsonFromRepo: empty JSON in', path, ' -> using fallback');
+        return { data: fallback, sha: f.sha };
+      }
+      const parsed = JSON.parse(raw) as T;
+      return { data: parsed, sha: f.sha };
+    } catch (parseErr) {
+      // corrupted JSON -> fall back but keep SHA so ghPutFile can update the existing file
+      console.warn('[users-approve] readJsonFromRepo: parse error in', path, ' -> using fallback. err=', (parseErr as any)?.message);
+      return { data: fallback, sha: f.sha };
+    }
   } catch (e) {
+    // file missing -> fall back with null sha so we create a new one
     console.warn('[users-approve] readJsonFromRepo fallback for', path, 'err=', e && (e as any).message);
     return { data: fallback, sha: null };
   }
