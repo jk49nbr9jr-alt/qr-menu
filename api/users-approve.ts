@@ -7,6 +7,10 @@ export const config = { runtime: "nodejs" } as const;
  * Storage is done via GitHub Contents API (no local FS).
  */
 
+function safeJSON(data: any) {
+  try { return JSON.stringify(data); } catch { return '"<unserializable>"'; }
+}
+
 type GitHubFile = { content: string; sha: string; encoding: "base64" | string };
 type UsersJson = { allowed: string[]; passwords: Record<string, string> };
 type PendingJson = Record<string, string>;
@@ -108,30 +112,39 @@ async function readBody(req: any): Promise<any> {
 
 function getURL(req: any): URL {
   try {
-    if (req?.url) return new URL(req.url, `http://${req.headers?.host || "localhost"}`);
+    if (req?.url) return new URL(req.url, `https://${req.headers?.host || "localhost"}`);
   } catch {}
-  return new URL("http://localhost/");
+  return new URL("https://localhost/");
 }
 
 export default async function handler(req: any) {
   // CORS preflight
   if (req.method === "OPTIONS") return new Response("ok", { status: 200, headers: CORS });
 
+  const url = getURL(req);
+
   // Optional: quick debug to verify env/paths from the browser
   if (req.method === "GET") {
-    const url = getURL(req);
     const tenant = sanitizeTenant(url.searchParams.get("tenant") ?? undefined);
     const usersPath = `data/${tenant}/users.json`;
     const pendingPath = `data/${tenant}/pending.json`;
-    return ok({
-      tenant,
-      paths: { usersPath, pendingPath },
-      env: {
-        GITHUB_OWNER_present: !!GH_OWNER,
-        GITHUB_REPO_present: !!GH_REPO,
-        GITHUB_TOKEN_present: !!GH_TOKEN,
-      },
-    });
+    const mode = url.searchParams.get("mode") || "info";
+
+    if (mode === "selftest") {
+      return ok({
+        tenant,
+        mode,
+        env: {
+          GITHUB_OWNER_present: !!GH_OWNER,
+          GITHUB_REPO_present: !!GH_REPO,
+          GITHUB_TOKEN_present: !!GH_TOKEN,
+        },
+        paths: { usersPath, pendingPath },
+        now: Date.now(),
+      });
+    }
+
+    return ok({ tenant, paths: { usersPath, pendingPath } });
   }
 
   if (req.method !== "POST") return err(405, "method-not-allowed");
@@ -145,7 +158,6 @@ export default async function handler(req: any) {
     });
   }
 
-  const url = getURL(req);
   const body = await readBody(req);
 
   const tenant = sanitizeTenant(body?.tenant ?? url.searchParams.get("tenant") ?? undefined);
@@ -165,6 +177,20 @@ export default async function handler(req: any) {
 
     const pwd = pending[username];
     if (!pwd) return err(400, "no-pending");
+
+    if (url.searchParams.get("dryrun") === "1") {
+      return ok({
+        dryrun: true,
+        tenant,
+        username,
+        plan: {
+          willAddToAllowed: !users.allowed.includes(username),
+          willSetPassword: true,
+          willRemoveFromPending: !!pwd,
+        },
+        snapshot: { users, pending },
+      });
+    }
 
     // Update structures
     if (!users.allowed.includes(username)) users.allowed.push(username);
@@ -189,6 +215,7 @@ export default async function handler(req: any) {
     return err(500, "approve-failed", {
       message: String(e?.message || e),
       stack: e?.stack || null,
+      url: url.toString(),
       context: { usersPath, pendingPath, tenant, username },
     });
   }
