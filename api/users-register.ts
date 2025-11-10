@@ -29,7 +29,7 @@ function requireSecret(req: Request) {
   if (!expected || hdr !== expected) return false;
   return true;
 }
-export const config = { runtime: 'edge' }; // optional
+export const config = { runtime: 'nodejs20.x' }; // use Node.js runtime because we need 'fs' and 'path'
 
 export default async function handler(req: Request) {
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 });
