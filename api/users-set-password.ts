@@ -4,7 +4,8 @@ export const config = { runtime: 'nodejs' } as const;
  * Set (or reset) a user's password inside data/<tenant>/users.json
  * Uses GitHub Contents API (no local FS) and requires x-admin-secret.
  *
- * Body: { tenant?: string, username: string, password: string }
+ * POST Body: { tenant?: string, username: string, password: string }
+ * GET  : only for diagnostics => /api/users-set-password?tenant=...&mode=selftest
  */
 
 type UsersJson = { allowed: string[]; passwords: Record<string, string> };
@@ -12,37 +13,49 @@ type GitHubFile = { content: string; sha: string; encoding: string };
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST,OPTIONS',
+  'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type,x-admin-secret',
 };
 
 function ok(data: any, status = 200) {
-  return new Response(JSON.stringify({ ok: true, ...data }), {
+  return new Response(JSON.stringify({ ok: true, ...data }, null, 2), {
     status,
     headers: { 'Content-Type': 'application/json', ...CORS },
   });
 }
 function err(status: number, message: string, details?: any) {
-  return new Response(JSON.stringify({ ok: false, error: message, details }), {
+  return new Response(JSON.stringify({ ok: false, error: message, details }, null, 2), {
     status,
     headers: { 'Content-Type': 'application/json', ...CORS },
   });
 }
 
+/** normalize tenant from body or query */
 function sanitizeTenant(input?: string) {
   const raw = (input || '').toString().trim().toLowerCase();
   const clean = raw.replace(/[^a-z0-9._-]/g, '');
   return clean || 'speisekarte';
 }
 
+/** headers.get fallback for Node.js runtime (where req.headers is a plain object) */
+function headerGet(req: Request, name: string): string | null {
+  const h: any = (req as any).headers;
+  if (h && typeof h.get === 'function') return h.get(name);
+  if (h && typeof h === 'object') {
+    const key = Object.keys(h).find(k => k.toLowerCase() === name.toLowerCase());
+    return key ? String(h[key]) : null;
+  }
+  return null;
+}
+
 function requireSecret(req: Request) {
-  const hdr = req.headers.get('x-admin-secret') || '';
+  const hdr = headerGet(req, 'x-admin-secret') || '';
   const expected = process.env.VITE_ADMIN_SECRET || process.env.ADMIN_SECRET || '';
   return !!expected && hdr === expected;
 }
 
 const GH_OWNER = process.env.GITHUB_OWNER || '';
-const GH_REPO = process.env.GITHUB_REPO || '';
+const GH_REPO  = process.env.GITHUB_REPO  || '';
 const GH_TOKEN = process.env.GITHUB_TOKEN || '';
 
 async function gh<T = any>(url: string, init?: RequestInit): Promise<T> {
@@ -67,6 +80,7 @@ async function ghGetFile(path: string): Promise<GitHubFile & { sha: string }> {
   return gh(`/repos/${GH_OWNER}/${GH_REPO}/contents/${encodeURIComponent(path)}`);
 }
 async function ghPutJson(path: string, obj: unknown, sha: string | null, message: string) {
+  // Buffer is available in node runtime
   const content = Buffer.from(JSON.stringify(obj, null, 2), 'utf8').toString('base64');
   return gh(`/repos/${GH_OWNER}/${GH_REPO}/contents/${encodeURIComponent(path)}`, {
     method: 'PUT',
@@ -87,13 +101,36 @@ async function readUsers(path: string): Promise<{ data: UsersJson; sha: string |
 
 export default async function handler(req: Request): Promise<Response> {
   if (req.method === 'OPTIONS') return new Response('ok', { status: 200, headers: CORS });
+
+  const url = new URL(req.url);
+  const tenantFromQuery = url.searchParams.get('tenant') || undefined;
+  const mode = url.searchParams.get('mode') || '';
+
+  if (req.method === 'GET') {
+    if (mode === 'selftest') {
+      const tenant = sanitizeTenant(tenantFromQuery);
+      if (!GH_OWNER || !GH_REPO || !GH_TOKEN) {
+        return err(500, 'missing-github-config', {
+          GITHUB_OWNER: !!GH_OWNER,
+          GITHUB_REPO:  !!GH_REPO,
+          GITHUB_TOKEN: !!GH_TOKEN,
+        });
+      }
+      const usersPath = `data/${tenant}/users.json`;
+      const { data, sha } = await readUsers(usersPath);
+      return ok({ tenant, usersPath, sha: sha || null, snapshot: data });
+    }
+    return err(405, 'method-not-allowed');
+  }
+
+  // POST
   if (req.method !== 'POST') return err(405, 'method-not-allowed');
   if (!requireSecret(req)) return err(401, 'unauthorized');
 
   if (!GH_OWNER || !GH_REPO || !GH_TOKEN) {
     return err(500, 'missing-github-config', {
       GITHUB_OWNER: !!GH_OWNER,
-      GITHUB_REPO: !!GH_REPO,
+      GITHUB_REPO:  !!GH_REPO,
       GITHUB_TOKEN: !!GH_TOKEN,
     });
   }
@@ -105,7 +142,7 @@ export default async function handler(req: Request): Promise<Response> {
     return err(400, 'invalid-json');
   }
 
-  const tenant = sanitizeTenant(body?.tenant);
+  const tenant   = sanitizeTenant(body?.tenant || tenantFromQuery);
   const username = (body?.username || '').toString().trim();
   const password = (body?.password || '').toString();
 
@@ -118,7 +155,8 @@ export default async function handler(req: Request): Promise<Response> {
     return err(403, 'not-allowed');
   }
 
-  users.passwords[username] = password; // Optional: hash
+  // NOTE: no hashing here — caller can provide already-hashed if desired
+  users.passwords[username] = password;
 
   await ghPutJson(usersPath, users, sha, `set password for ${username} (tenant: ${tenant})`);
   return ok({ tenant, username, changed: true });
