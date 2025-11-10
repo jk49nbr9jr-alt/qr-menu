@@ -1047,19 +1047,8 @@ function AdminApp() {
   }
 
   if (!authed) {
-    return (
-      <div className="min-h-screen grid place-items-center bg-neutral-50 text-neutral-900 p-4">
-        <form onSubmit={login} className="w-full max-w-sm rounded-xl border bg-white p-4 grid gap-3">
-          <div className="text-lg font-semibold">Admin Login</div>
-          <label className="text-sm">
-            <div>Passwort</div>
-            <Input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="admin123" />
-          </label>
-          <PrimaryBtn type="submit">Anmelden</PrimaryBtn>
-          <div className="text-xs text-neutral-500">Hinweis: Demo-Login ohne Backend. Passwort in App-Code (ADMIN_PASSWORD) änderbar.</div>
-        </form>
-      </div>
-    );
+    window.location.hash = "/";
+    return null;
   }
 
   return (
