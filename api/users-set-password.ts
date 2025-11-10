@@ -177,6 +177,13 @@ export default async function handler(req: Request): Promise<Response> {
 
   const usersPath = `data/${tenant}/users.json`;
   const { data: users, sha } = await readUsers(usersPath);
+  // Harden against legacy files that may not have a 'passwords' object yet
+  if (!users || typeof users !== 'object') {
+    return err(500, 'users-json-invalid');
+  }
+  if (!('passwords' in users) || typeof (users as any).passwords !== 'object' || (users as any).passwords === null) {
+    (users as any).passwords = {};
+  }
 
   if (!users.allowed.includes(username)) {
     return err(403, 'not-allowed');
