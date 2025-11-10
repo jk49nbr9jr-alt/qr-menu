@@ -114,12 +114,35 @@ function getURL(req: any): URL {
 }
 
 export default async function handler(req: any) {
+  // CORS preflight
   if (req.method === "OPTIONS") return new Response("ok", { status: 200, headers: CORS });
+
+  // Optional: quick debug to verify env/paths from the browser
+  if (req.method === "GET") {
+    const url = getURL(req);
+    const tenant = sanitizeTenant(url.searchParams.get("tenant") ?? undefined);
+    const usersPath = `data/${tenant}/users.json`;
+    const pendingPath = `data/${tenant}/pending.json`;
+    return ok({
+      tenant,
+      paths: { usersPath, pendingPath },
+      env: {
+        GITHUB_OWNER_present: !!GH_OWNER,
+        GITHUB_REPO_present: !!GH_REPO,
+        GITHUB_TOKEN_present: !!GH_TOKEN,
+      },
+    });
+  }
+
   if (req.method !== "POST") return err(405, "method-not-allowed");
   if (!requireSecret(req)) return err(401, "unauthorized");
 
   if (!GH_OWNER || !GH_REPO || !GH_TOKEN) {
-    return err(500, "missing-github-config", { GITHUB_OWNER: !!GH_OWNER, GITHUB_REPO: !!GH_REPO, GITHUB_TOKEN: !!GH_TOKEN });
+    return err(500, "missing-github-config", {
+      GITHUB_OWNER: !!GH_OWNER,
+      GITHUB_REPO: !!GH_REPO,
+      GITHUB_TOKEN: !!GH_TOKEN,
+    });
   }
 
   const url = getURL(req);
@@ -132,20 +155,41 @@ export default async function handler(req: any) {
   const usersPath = `data/${tenant}/users.json`;
   const pendingPath = `data/${tenant}/pending.json`;
 
-  // Load files (or defaults)
-  const { data: users, sha: usersSha } = await readJsonFromRepo<UsersJson>(usersPath, { allowed: ["admin"], passwords: {} });
-  const { data: pending, sha: pendingSha } = await readJsonFromRepo<PendingJson>(pendingPath, {});
+  try {
+    // Load files (or defaults)
+    const { data: users, sha: usersSha } = await readJsonFromRepo<UsersJson>(usersPath, {
+      allowed: ["admin"],
+      passwords: {},
+    });
+    const { data: pending, sha: pendingSha } = await readJsonFromRepo<PendingJson>(pendingPath, {});
 
-  const pwd = pending[username];
-  if (!pwd) return err(400, "no-pending");
+    const pwd = pending[username];
+    if (!pwd) return err(400, "no-pending");
 
-  if (!users.allowed.includes(username)) users.allowed.push(username);
-  users.passwords[username] = pwd;
-  delete pending[username];
+    // Update structures
+    if (!users.allowed.includes(username)) users.allowed.push(username);
+    users.passwords[username] = pwd;
+    delete pending[username];
 
-  // Save both files back
-  await ghPutFile(usersPath, users, usersSha, `approve user ${username} (tenant: ${tenant})`);
-  await ghPutFile(pendingPath, pending, pendingSha, `remove user from pending ${username} (tenant: ${tenant})`);
+    // Save both files back to repo (two commits)
+    try {
+      await ghPutFile(usersPath, users, usersSha, `approve user ${username} (tenant: ${tenant})`);
+    } catch (e: any) {
+      return err(500, "github-write-users-failed", { message: String(e?.message || e) });
+    }
+    try {
+      await ghPutFile(pendingPath, pending, pendingSha, `remove user from pending ${username} (tenant: ${tenant})`);
+    } catch (e: any) {
+      // If pending write fails, surface explicit error (admin can re-run approve)
+      return err(500, "github-write-pending-failed", { message: String(e?.message || e) });
+    }
 
-  return ok({ tenant, username });
+    return ok({ tenant, username });
+  } catch (e: any) {
+    return err(500, "approve-failed", {
+      message: String(e?.message || e),
+      stack: e?.stack || null,
+      context: { usersPath, pendingPath, tenant, username },
+    });
+  }
 }
