@@ -1,6 +1,5 @@
 {
   "allowed": [
-    "admin",
-    "c"
+    "admin"
   ]
 }
