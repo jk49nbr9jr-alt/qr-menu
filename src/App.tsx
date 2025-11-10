@@ -338,7 +338,7 @@ function PublicApp() {
           {/* Right side actions */}
           <div className="flex items-center justify-end">
             <Button
-              className="rounded-full border-neutral-300 px-4 py-2 text-sm"
+              className="rounded-full border border-neutral-300 px-6 py-2 text-sm hover:bg-neutral-100 active:bg-neutral-200"
               onClick={() => setLoginOpen(true)}
             >
               Anmelden
@@ -785,13 +785,17 @@ function AdminApp() {
               {sessionStorage.getItem(ADMIN_USER_KEY) || username || "admin"}
             </span>
             <Button
-              className="text-xs px-2 py-1"
-              style={{ fontSize: "0.85em" }}
+              className="rounded-full border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-100 active:bg-neutral-200"
               onClick={changePassword}
             >
               Passwort ändern
             </Button>
-            <Button onClick={logout}>Logout</Button>
+            <Button
+              className="rounded-full border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-100 active:bg-neutral-200"
+              onClick={logout}
+            >
+              Logout
+            </Button>
           </div>
         </div>
         <div className="border-t">
