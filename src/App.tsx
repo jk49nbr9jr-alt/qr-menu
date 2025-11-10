@@ -82,7 +82,12 @@ async function serverRegister(username: string, password: string) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ tenant, username, password }),
   });
-  if (!r.ok) throw new Error(await r.text());
+  let data: any = {};
+  try { data = await r.json(); } catch {}
+  if (!r.ok || !data?.ok) {
+    throw new Error(data?.error || "register-failed");
+  }
+  return data;
 }
 async function serverApprove(username: string) {
   const tenant = getTenantKey();
@@ -389,6 +394,7 @@ function PublicApp() {
   const [regPassword, setRegPassword] = useState("");
   const [regError, setRegError] = useState<string | null>(null);
   const [regDone, setRegDone] = useState(false);
+  const [isSending, setIsSending] = useState(false);
 
   // --- Login Modal Handler (Server) ---
   async function handleLoginSubmit(e: React.FormEvent) {
@@ -511,16 +517,24 @@ function PublicApp() {
               className="p-4 grid gap-3"
               onSubmit={async (e) => {
                 e.preventDefault();
+                if (regDone || isSending) return;
+                setIsSending(true);
                 setRegError(null);
                 const u = regUsername.trim();
                 const p = regPassword;
-                if (!u || !p) { setRegError("Bitte Benutzername und Passwort eingeben."); return; }
-                if (u.toLowerCase() === "admin") { setRegError("Dieser Benutzername ist reserviert."); return; }
+                if (!u || !p) { setRegError("Bitte Benutzername und Passwort eingeben."); setIsSending(false); return; }
+                if (u.toLowerCase() === "admin") { setRegError("Dieser Benutzername ist reserviert."); setIsSending(false); return; }
                 try {
                   await serverRegister(u, p);
                   setRegDone(true);
-                } catch {
-                  setRegError("Antrag konnte nicht gesendet werden.");
+                } catch (err: any) {
+                  const msg = String(err?.message || "");
+                  if (msg === "exists") setRegError("Benutzer existiert bereits.");
+                  else if (msg === "pending") setRegError("Es liegt bereits eine Anfrage vor.");
+                  else if (msg === "invalid") setRegError("Ungültige Eingabe.");
+                  else setRegError("Antrag konnte nicht gesendet werden.");
+                } finally {
+                  setIsSending(false);
                 }
               }}
             >
@@ -528,16 +542,16 @@ function PublicApp() {
                 <>
                   <label className="text-sm">
                     <div>Benutzername</div>
-                    <Input value={regUsername} onChange={e => setRegUsername(e.target.value)} placeholder="mein-name" />
+                    <Input value={regUsername} onChange={e => setRegUsername(e.target.value)} placeholder="mein-name" disabled={isSending} />
                   </label>
                   <label className="text-sm">
                     <div>Passwort</div>
-                    <Input type="password" value={regPassword} onChange={e => setRegPassword(e.target.value)} placeholder="Passwort" />
+                    <Input type="password" value={regPassword} onChange={e => setRegPassword(e.target.value)} placeholder="Passwort" disabled={isSending} />
                   </label>
                   {regError && <div className="text-xs text-red-600">{regError}</div>}
                   <div className="flex items-center justify-end gap-2 pt-2">
-                    <Button type="button" onClick={() => setRegisterOpen(false)}>Abbrechen</Button>
-                    <PrimaryBtn type="submit">Antrag senden</PrimaryBtn>
+                    <Button type="button" onClick={() => setRegisterOpen(false)} disabled={isSending}>Abbrechen</Button>
+                    <PrimaryBtn type="submit" disabled={isSending}>{isSending ? "Senden…" : "Antrag senden"}</PrimaryBtn>
                   </div>
                 </>
               ) : (

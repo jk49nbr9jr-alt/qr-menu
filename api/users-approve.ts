@@ -86,7 +86,34 @@ async function readJsonFromRepo<T>(path: string, fallback: T): Promise<{ data: T
   }
 }
 
-export default async function handler(req: Request) {
+// --- helpers for Node/Edge compatibility ---
+async function readBody(req: any): Promise<any> {
+  try {
+    if (typeof req?.json === "function") {
+      return await req.json();
+    }
+  } catch {}
+  try {
+    const chunks: Uint8Array[] = [];
+    // @ts-ignore - Node readable stream
+    for await (const chunk of req as any) {
+      chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
+    }
+    const raw = Buffer.concat(chunks).toString("utf8");
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function getURL(req: any): URL {
+  try {
+    if (req?.url) return new URL(req.url, `http://${req.headers?.host || "localhost"}`);
+  } catch {}
+  return new URL("http://localhost/");
+}
+
+export default async function handler(req: any) {
   if (req.method === "OPTIONS") return new Response("ok", { status: 200, headers: CORS });
   if (req.method !== "POST") return err(405, "method-not-allowed");
   if (!requireSecret(req)) return err(401, "unauthorized");
@@ -95,14 +122,11 @@ export default async function handler(req: Request) {
     return err(500, "missing-github-config", { GITHUB_OWNER: !!GH_OWNER, GITHUB_REPO: !!GH_REPO, GITHUB_TOKEN: !!GH_TOKEN });
   }
 
-  let body: any;
-  try {
-    body = await req.json();
-  } catch {
-    return err(400, "invalid-json");
-  }
-  const tenant = sanitizeTenant(body?.tenant);
-  const username = (body?.username || "").toString().trim();
+  const url = getURL(req);
+  const body = await readBody(req);
+
+  const tenant = sanitizeTenant(body?.tenant ?? url.searchParams.get("tenant") ?? undefined);
+  const username = ((body?.username ?? url.searchParams.get("username") ?? "") as string).toString().trim();
   if (!username) return err(400, "username-required");
 
   const usersPath = `data/${tenant}/users.json`;
