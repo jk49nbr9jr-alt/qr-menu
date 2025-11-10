@@ -125,17 +125,41 @@ export default async function handler(req: Request): Promise<Response> {
   const tenant = sanitizeTenant(body?.tenant);
   const username = (body?.username || '').toString().trim();
   if (!username) return err(400, 'username-required');
-  if (username === 'admin') return err(400, 'no-admin-delete');
+  if (username.toLowerCase() === 'admin') return err(400, 'no-admin-delete');
 
   const usersPath = `data/${tenant}/users.json`;
   const { data: users, sha } = await readUsers(usersPath);
 
-  const beforeAllowed = users.allowed.length;
-  users.allowed = users.allowed.filter((u) => u !== username);
-  if (users.passwords[username]) delete users.passwords[username];
+  // Helper to normalize comparisons (trim + lowercase)
+  const norm = (s: string) => s.trim().toLowerCase();
 
-  // Wenn sich nichts geändert hat, trotzdem ok zurückgeben
-  if (users.allowed.length === beforeAllowed && !(username in users.passwords)) {
+  // Remove from allowed (case/whitespace insensitive)
+  const beforeAllowed = users.allowed.slice();
+  users.allowed = (users.allowed || []).filter((u) => norm(u) !== norm(username));
+
+  // Remove password by exact key or any normalized match
+  let pwdChanged = false;
+  if (users.passwords) {
+    // Exact key
+    if (username in users.passwords) {
+      delete users.passwords[username];
+      pwdChanged = true;
+    }
+    // Any other key that normalizes to the same value
+    for (const k of Object.keys(users.passwords)) {
+      if (norm(k) === norm(username)) {
+        delete users.passwords[k];
+        pwdChanged = true;
+      }
+    }
+  } else {
+    users.passwords = {};
+  }
+
+  const allowedChanged = beforeAllowed.length !== users.allowed.length;
+
+  // If nothing changed, still return ok (idempotent delete)
+  if (!allowedChanged && !pwdChanged) {
     return ok({ tenant, username, changed: false });
   }
 
