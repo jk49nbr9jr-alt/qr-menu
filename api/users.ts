@@ -1,29 +1,38 @@
-// api/users.ts
+// api/users.ts (Edge)
 export const config = { runtime: "edge" };
 
 type UsersJson = {
   allowed?: string[];
-  pending?: Record<string, string>;
   passwords?: Record<string, string>;
 };
+type PendingJson = Record<string, string>;
 
-const GH_OWNER  = process.env.GITHUB_OWNER!;
-const GH_REPO   = process.env.GITHUB_REPO!;
+const GH_OWNER  = process.env.GITHUB_OWNER || "";
+const GH_REPO   = process.env.GITHUB_REPO || "";
 const GH_BRANCH = process.env.GITHUB_BRANCH || "main";
-const GH_TOKEN  = process.env.GITHUB_TOKEN!;
+const GH_TOKEN  = process.env.GITHUB_TOKEN || "";
 const ADMIN_SECRET = process.env.ADMIN_SECRET || process.env.VITE_ADMIN_SECRET || "";
 
-// base64 utils (Edge)
-const dec = (b: string) => decodeURIComponent(escape(atob(b)));
+// base64 decode (Edge-safe)
+const b64dec = (b: string) => {
+  try { return decodeURIComponent(escape(atob(b))); } catch { return atob(b); }
+};
 
-function jsonRes(status: number, body: unknown) {
-  return new Response(JSON.stringify(body, null, 2), {
+const jsonRes = (status: number, body: unknown) =>
+  new Response(JSON.stringify(body, null, 2), {
     status,
-    headers: { "content-type": "application/json" },
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      "cache-control": "no-store",
+    },
   });
-}
 
-async function gh<T>(path: string): Promise<T> {
+const sanitizeTenant = (t?: string) => {
+  const clean = (t || "").toLowerCase().trim().replace(/[^a-z0-9._-]/g, "");
+  return clean || "speisekarte";
+};
+
+async function gh<T>(path: string): Promise<{ ok: true; data: T } | { ok: false; status: number; text: string }> {
   const r = await fetch(`https://api.github.com${path}`, {
     headers: {
       Authorization: `Bearer ${GH_TOKEN}`,
@@ -31,51 +40,72 @@ async function gh<T>(path: string): Promise<T> {
     },
     cache: "no-store",
   });
-  if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
-  return r.json() as Promise<T>;
+  if (!r.ok) {
+    return { ok: false, status: r.status, text: await r.text() };
+  }
+  return { ok: true, data: (await r.json()) as T };
 }
 
 export default async function handler(req: Request) {
   try {
     const url = new URL(req.url);
-    const tenant = (url.searchParams.get("tenant") || "").trim();
+    const tenant = sanitizeTenant(url.searchParams.get("tenant") || undefined);
     if (!tenant) return jsonRes(400, { ok: false, error: "tenant missing" });
 
-    // optional: self-test mode
     const mode = url.searchParams.get("mode") || "";
 
-    // read users.json from repo (if missing, return defaults)
+    // --- users.json lesen (tolerant)
+    let allowed: string[] = ["admin"];
+    let passwords: Record<string, string> = {};
+
     type GHFile = { content: string; sha: string; encoding: "base64" };
-    let users: UsersJson = { allowed: ["admin"], pending: {}, passwords: {} };
 
-    try {
-      const file = await gh<GHFile>(
-        `/repos/${GH_OWNER}/${GH_REPO}/contents/data/${tenant}/users.json?ref=${encodeURIComponent(GH_BRANCH)}`
-      );
-      const text = dec(file.content);
-      const parsed = JSON.parse(text) as UsersJson;
-      users.allowed = parsed.allowed || ["admin"];
-      users.pending = parsed.pending || {};
-      users.passwords = parsed.passwords || {};
-    } catch {
-      // file not found => keep defaults
+    if (GH_TOKEN && GH_OWNER && GH_REPO) {
+      const usersPath = `/repos/${GH_OWNER}/${GH_REPO}/contents/data/${tenant}/users.json?ref=${encodeURIComponent(GH_BRANCH)}`;
+      const ur = await gh<GHFile>(usersPath);
+      if (ur.ok) {
+        try {
+          const txt = b64dec(ur.data.content || "");
+          const parsed = JSON.parse(txt) as UsersJson | string[];
+          if (Array.isArray(parsed)) {
+            allowed = parsed.length ? parsed : ["admin"];
+          } else if (parsed && typeof parsed === "object") {
+            allowed = Array.isArray(parsed.allowed) && parsed.allowed.length ? parsed.allowed : ["admin"];
+            passwords = parsed.passwords && typeof parsed.passwords === "object" ? parsed.passwords : {};
+          }
+        } catch {
+          // fallback auf defaults
+        }
+      } else if (ur.status !== 404) {
+        // andere Fehler als 404 melden
+        return jsonRes(500, { ok: false, error: "github-read-users", detail: ur.text });
+      }
+    } else {
+      return jsonRes(500, { ok: false, error: "server-misconfigured" });
     }
 
-    // include passwords only with valid secret
-    const hasSecret =
-      !!ADMIN_SECRET && req.headers.get("x-admin-secret") === ADMIN_SECRET;
-
-    const body: any = {
-      ok: true,
-      allowed: users.allowed || ["admin"],
-      pending: users.pending || {},
-    };
-
-    if (hasSecret) {
-      body.passwords = users.passwords || {};
+    // --- pending.json separat lesen
+    let pending: PendingJson = {};
+    const pendingPath = `/repos/${GH_OWNER}/${GH_REPO}/contents/data/${tenant}/pending.json?ref=${encodeURIComponent(GH_BRANCH)}`;
+    const pr = await gh<GHFile>(pendingPath);
+    if (pr.ok) {
+      try {
+        const txt = b64dec(pr.data.content || "");
+        const obj = JSON.parse(txt);
+        if (obj && typeof obj === "object") pending = obj as PendingJson;
+      } catch {
+        pending = {};
+      }
+    } else if (pr.status !== 404) {
+      return jsonRes(500, { ok: false, error: "github-read-pending", detail: pr.text });
     }
 
-    // optional visibility for quick checks
+    // Nur mit Secret Passwörter mitsenden
+    const hasSecret = !!ADMIN_SECRET && req.headers.get("x-admin-secret") === ADMIN_SECRET;
+
+    const body: any = { ok: true, tenant, allowed, pending };
+    if (hasSecret) body.passwords = passwords;
+
     if (mode === "selftest") {
       body.selftest = {
         hasSecret,
@@ -84,7 +114,6 @@ export default async function handler(req: Request) {
           GITHUB_REPO_present: !!GH_REPO,
           GITHUB_TOKEN_present: !!GH_TOKEN,
         },
-        tenant,
       };
     }
 
