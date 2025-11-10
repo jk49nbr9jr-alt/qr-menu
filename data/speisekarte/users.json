@@ -1,11 +1,6 @@
 {
   "allowed": [
     "admin",
-    "can",
     "c"
-  ],
-  "passwords": {
-    "can": "cam",
-    "c": "c"
-  }
+  ]
 }
