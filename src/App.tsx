@@ -735,6 +735,44 @@ function AdminApp() {
     scheduleAutosave();
   }
 
+  // --- Kategorien-Reihenfolge ändern (wir ordnen das Menü-Array so um,
+  //     dass die erste Vorkommens-Reihenfolge der Kategorien dem neuen
+  //     Wunsch entspricht. Die Public-Ansicht übernimmt das automatisch,
+  //     weil sie die Kategorien in dieser Reihenfolge ableitet.)
+  function reorderMenuByCategories(newOrder: string[]) {
+    setMenu(prev => {
+      const list = prev ?? [];
+      const bucket: Record<string, MenuItem[]> = {};
+      for (const it of list) {
+        (bucket[it.category] ||= []).push(it);
+      }
+      const result: MenuItem[] = [];
+      for (const c of newOrder) {
+        if (bucket[c]) {
+          result.push(...bucket[c]);
+          delete bucket[c];
+        }
+      }
+      // übrige Kategorien (falls vorhanden) hinten anhängen
+      for (const rest of Object.keys(bucket)) {
+        result.push(...bucket[rest]);
+      }
+      return result;
+    });
+    scheduleAutosave();
+  }
+
+  function moveCategory(name: string, dir: -1 | 1) {
+    const idx = categories.indexOf(name);
+    if (idx < 0) return;
+    const j = idx + dir;
+    if (j < 0 || j >= categories.length) return; // außerhalb – nichts tun
+    const order = [...categories];
+    [order[idx], order[j]] = [order[j], order[idx]];
+    reorderMenuByCategories(order);
+    setCat(name);
+  }
+
 
   function login(e: React.FormEvent) {
     e.preventDefault();
@@ -958,6 +996,20 @@ function AdminApp() {
                           {c}
                         </button>
                         <div className="ml-3 flex items-center gap-2">
+                          <button
+                            className="text-xs px-2 py-1 border rounded-full text-neutral-600 hover:text-neutral-800 hover:border-neutral-400"
+                            onClick={(e) => { e.stopPropagation(); moveCategory(c, -1); }}
+                            title="Kategorie nach oben/links"
+                          >
+                            ▲
+                          </button>
+                          <button
+                            className="text-xs px-2 py-1 border rounded-full text-neutral-600 hover:text-neutral-800 hover:border-neutral-400"
+                            onClick={(e) => { e.stopPropagation(); moveCategory(c, 1); }}
+                            title="Kategorie nach unten/rechts"
+                          >
+                            ▼
+                          </button>
                           <button
                             className="text-xs px-2 py-1 border rounded-full text-neutral-600 hover:text-neutral-800 hover:border-neutral-400"
                             onClick={(e) => { e.stopPropagation(); renameCategory(c); }}
