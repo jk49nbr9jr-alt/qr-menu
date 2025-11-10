@@ -60,6 +60,9 @@ const ADMIN_PASSWORD = "admin123"; // Demo-Passwort – später ersetzen
 
 // --- Server API helpers for user management (sync across devices) ---
 const ADMIN_SECRET = (import.meta as any).env.VITE_ADMIN_SECRET || "";
+if (import.meta.env?.DEV && !ADMIN_SECRET) {
+  console.warn("[qr-menu] VITE_ADMIN_SECRET ist leer – Admin-APIs (Passwort/Approve/Delete) werden 400 liefern.");
+}
 
 type UsersResponse = {
   ok: boolean;
@@ -976,8 +979,14 @@ function AdminApp() {
       alert("Passwörter stimmen nicht überein.");
       return;
     }
-    await serverSetPassword(currentUser, pw1);
-    alert("Passwort erfolgreich geändert.");
+    try {
+      await serverSetPassword(currentUser, pw1);
+      alert("Passwort erfolgreich geändert.");
+    } catch (err: any) {
+      const msg = String(err?.message || err || "");
+      alert("Passwort konnte nicht gesetzt werden.\n" + msg);
+      console.error("[set-password] failed:", err);
+    }
   }
 
   // User management helpers (Server)
@@ -989,8 +998,14 @@ function AdminApp() {
       alert("Passwörter stimmen nicht überein.");
       return;
     }
-    await serverSetPassword(targetUser, pw1);
-    alert(`Passwort für "${targetUser}" geändert.`);
+    try {
+      await serverSetPassword(targetUser, pw1);
+      alert(`Passwort für "${targetUser}" geändert.`);
+    } catch (err: any) {
+      const msg = String(err?.message || err || "");
+      alert(`Passwort konnte für "${targetUser}" nicht gesetzt werden.\n` + msg);
+      console.error("[reset-password] failed:", err);
+    }
   }
 
   async function deleteUser(targetUser: string) {
@@ -998,9 +1013,15 @@ function AdminApp() {
     if (targetUser === "admin") { alert("Der Benutzer 'admin' kann nicht gelöscht werden."); return; }
     if (targetUser === currentUser) { alert("Du kannst den aktuell angemeldeten Benutzer nicht löschen."); return; }
     if (!confirm(`Benutzer "${targetUser}" wirklich löschen?`)) return;
-    await serverDeleteUser(targetUser);
-    const j = await apiUsersGet(getTenantKey());
-    setUsersList(j.allowed || []);
+    try {
+      await serverDeleteUser(targetUser);
+      const j = await apiUsersGet(getTenantKey());
+      setUsersList(j.allowed || []);
+    } catch (err: any) {
+      const msg = String(err?.message || err || "");
+      alert(`Benutzer "${targetUser}" konnte nicht gelöscht werden.\n` + msg);
+      console.error("[users-delete] failed:", err);
+    }
   }
 
   if (!authed) {
