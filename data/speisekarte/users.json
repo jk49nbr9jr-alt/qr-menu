@@ -2,5 +2,8 @@
   "allowed": [
     "admin",
     "test"
-  ]
+  ],
+  "passwords": {
+    "admin": "can123"
+  }
 }
