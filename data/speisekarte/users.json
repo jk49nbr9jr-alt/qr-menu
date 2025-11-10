@@ -4,6 +4,7 @@
     "a"
   ],
   "passwords": {
-    "a": "a"
-  }
+    "a": "b"
+  },
+  "pending": {}
 }
