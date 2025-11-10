@@ -1023,10 +1023,9 @@ function AdminApp() {
     }
     try {
       await serverSetPassword(targetUser, pw1);
-      alert(`Passwort für "${targetUser}" geändert.`);
+      showNotify(`"${targetUser}" Passwort geändert.`, "success");
     } catch (err: any) {
-      const msg = String(err?.message || err || "");
-      alert(`Passwort konnte für "${targetUser}" nicht gesetzt werden.\n` + msg);
+      showNotify(`Passwort konnte für "${targetUser}" nicht gesetzt werden.`, "error");
       console.error("[reset-password] failed:", err);
     }
   }
@@ -1041,8 +1040,7 @@ function AdminApp() {
       const j = await apiUsersGet(getTenantKey());
       setUsersList(j.allowed || []);
     } catch (err: any) {
-      const msg = String(err?.message || err || "");
-      alert(`Benutzer "${targetUser}" konnte nicht gelöscht werden.\n` + msg);
+      showNotify(`Benutzer "${targetUser}" konnte nicht gelöscht werden.`, "error");
       console.error("[users-delete] failed:", err);
     }
   }
@@ -1485,7 +1483,7 @@ function AdminApp() {
                   try {
                     const currentUser = sessionStorage.getItem(ADMIN_USER_KEY) || username;
                     await serverSetPassword(currentUser, newPw);
-                    alert("Passwort erfolgreich geändert.");
+                    showNotify("Passwort erfolgreich geändert.", "success");
                     setPasswordModalOpen(false);
                     setNewPw("");
                     setConfirmPw("");
