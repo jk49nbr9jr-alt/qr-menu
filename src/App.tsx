@@ -652,6 +652,8 @@ function AdminApp() {
     if (typeof window !== "undefined") return sessionStorage.getItem(ADMIN_USER_KEY) || "";
     return "";
   });
+  const currentUser = (typeof window !== "undefined" ? sessionStorage.getItem(ADMIN_USER_KEY) : null) || username || "";
+  const isSuperAdmin = currentUser === "admin";
   // --- Toolbar/Category Scroll State ---
   const [navOpen, setNavOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -972,20 +974,24 @@ function AdminApp() {
             <span className="text-sm text-neutral-600">– Admin</span>
           </div>
           <div className="flex items-center gap-3">
-            <Button
-              className="rounded-full border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-100 active:bg-neutral-200"
-              onClick={() => { setUsersList(loadAllowedUsers()); setUsersOpen(true); }}
-              pill
-            >
-              Benutzer ({usersList.length})
-            </Button>
-            <Button
-              className="rounded-full border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-100 active:bg-neutral-200"
-              onClick={() => { setPendingUsers(loadPendingUsers()); setPendingOpen(true); }}
-              pill
-            >
-              Anträge ({Object.keys(pendingUsers || {}).length})
-            </Button>
+            {isSuperAdmin && (
+              <>
+                <Button
+                  className="rounded-full border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-100 active:bg-neutral-200"
+                  onClick={() => { setUsersList(loadAllowedUsers()); setUsersOpen(true); }}
+                  pill
+                >
+                  Benutzer ({usersList.length})
+                </Button>
+                <Button
+                  className="rounded-full border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-100 active:bg-neutral-200"
+                  onClick={() => { setPendingUsers(loadPendingUsers()); setPendingOpen(true); }}
+                  pill
+                >
+                  Anträge ({Object.keys(pendingUsers || {}).length})
+                </Button>
+              </>
+            )}
             <span className="text-sm text-neutral-700">
               {sessionStorage.getItem(ADMIN_USER_KEY) || username || "admin"}
             </span>
@@ -1004,7 +1010,7 @@ function AdminApp() {
               Logout
             </Button>
           </div>
-      {usersOpen && (
+      {isSuperAdmin && usersOpen && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center">
           <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
             <div className="p-4 border-b flex items-center justify-between">
@@ -1275,7 +1281,7 @@ function AdminApp() {
         © {new Date().getFullYear()} QR-Speisekarte Urixsoft
       </footer>
 
-      {pendingOpen && (
+      {isSuperAdmin && pendingOpen && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center">
           <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
             <div className="p-4 border-b flex items-center justify-between">
