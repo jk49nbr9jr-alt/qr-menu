@@ -771,6 +771,13 @@ function AdminApp() {
   const [confirmPw, setConfirmPw] = useState("");
   const [pwError, setPwError] = useState<string | null>(null);
 
+  // --- Notification State ---
+  const [notify, setNotify] = useState<{ msg: string; type?: "info" | "error" | "success" } | null>(null);
+  function showNotify(msg: string, type: "info" | "error" | "success" = "info") {
+    setNotify({ msg, type });
+    setTimeout(() => setNotify(null), 2500);
+  }
+
   // --- Toolbar/Category Scroll State ---
   const [navOpen, setNavOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -1381,23 +1388,27 @@ function AdminApp() {
                         className="rounded-full px-3 py-1 text-sm"
                         onClick={async () => {
                           try {
-                            // Optimistic UI: remove from local pending list immediately
+                            // Optimistic UI: sofort aus der Pending-Liste entfernen
                             setPendingUsers(prev => {
                               const next = { ...prev };
                               delete next[u];
                               return next;
                             });
 
+                            // Benutzer sofort lokal hinzufügen
+                            setUsersList(prev => [...prev, u]);
+
+                            // Server-Update
                             await serverApprove(u);
 
-                            // Refresh allowed users list (so header count updates etc.)
+                            // Optional: Backend neu laden, um sicherzustellen, dass alles synchron ist
                             const j = await apiUsersGet(getTenantKey());
                             setUsersList(j.allowed || []);
 
-                            alert(`"${u}" freigegeben.`);
+                            showNotify(`"${u}" freigegeben.`, "success");
                           } catch (e: any) {
                             console.error(e);
-                            alert("Freigeben fehlgeschlagen:\n" + (e?.message || e));
+                            showNotify("Freigeben fehlgeschlagen: " + (e?.message || e), "error");
                           }
                         }}
                         pill
@@ -1417,10 +1428,10 @@ function AdminApp() {
 
                             await serverReject(u);
 
-                            alert(`"${u}" abgelehnt.`);
+                            showNotify(`"${u}" abgelehnt.`, "success");
                           } catch (e: any) {
                             console.error(e);
-                            alert("Ablehnen fehlgeschlagen:\n" + (e?.message || e));
+                            showNotify("Ablehnen fehlgeschlagen: " + (e?.message || e), "error");
                           }
                         }}
                         pill
@@ -1502,6 +1513,21 @@ function AdminApp() {
           upsertItem(draft);
         }}
       />
+      {/* Notification */}
+      {notify && (
+        <div
+          className={`fixed bottom-5 left-1/2 -translate-x-1/2 px-5 py-3 rounded-xl shadow-lg text-sm font-medium text-white transition-all duration-300 ${
+            notify.type === "error"
+              ? "bg-red-600"
+              : notify.type === "success"
+              ? "bg-green-600"
+              : "bg-neutral-700"
+          }`}
+          style={{ zIndex: 9999 }}
+        >
+          {notify.msg}
+        </div>
+      )}
     </div>
   );
 }
