@@ -1,9 +1,10 @@
 {
   "allowed": [
-    "admin"
+    "admin",
+    "c"
   ],
-  "pending": {},
   "passwords": {
-    "admin": "admin123"
+    "admin": "admin123",
+    "c": "c"
   }
 }
