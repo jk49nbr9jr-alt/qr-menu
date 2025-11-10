@@ -57,9 +57,6 @@ const LOGO_SRC = "/logo.png";
 const ADMIN_TOKEN_KEY = "qrmenu.admin.token";
 const ADMIN_USER_KEY = "qrmenu.admin.user";
 const ADMIN_PASSWORD = "admin123"; // Demo-Passwort – später ersetzen
-const ALLOWED_USERS_KEY = "qrmenu.allowed.users";
-const PENDING_USERS_KEY = "qrmenu.pending.users";
-const PASSWORDS_KEY = "qrmenu.passwords";
 
 // --- Server API helpers for user management (sync across devices) ---
 const ADMIN_SECRET = (import.meta as any).env.VITE_ADMIN_SECRET || "";
