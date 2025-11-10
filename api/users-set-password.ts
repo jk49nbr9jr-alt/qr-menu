@@ -1,123 +1,106 @@
-// Serverless function: set or change a user's password
-// Works on Vercel (edge runtime).
-// Updates `data/<tenant>/passwords.json` in the GitHub repo via the Contents API.
+// api/users-set-password.ts
+export const config = { runtime: "edge" }; // Vercel Edge
 
-export const config = { runtime: 'edge' };
+type GHFile = { content: string; sha: string; encoding: "base64" };
 
-// --- Env ---
-const GH_OWNER   = process.env.GITHUB_OWNER as string;
-const GH_REPO    = process.env.GITHUB_REPO as string;
-const GH_BRANCH  = process.env.GITHUB_BRANCH || 'main';
-const GH_TOKEN   = process.env.GITHUB_TOKEN as string; // classic/token with repo contents scope
-const ADMIN_SECRET = process.env.ADMIN_SECRET as string;
+const GH_OWNER  = process.env.GITHUB_OWNER !;
+const GH_REPO   = process.env.GITHUB_REPO  !;
+const GH_BRANCH = process.env.GITHUB_BRANCH || "main";
+const GH_TOKEN  = process.env.GITHUB_TOKEN !;
 
-// --- Helpers ---
-function jsonRes(status: number, data: unknown) {
-  return new Response(JSON.stringify(data, null, 2), {
-    status,
-    headers: { 'content-type': 'application/json' },
+const ADMIN_SECRET = process.env.ADMIN_SECRET || process.env.VITE_ADMIN_SECRET || "";
+
+// base64 helpers for Edge
+const enc = (s: string) => btoa(unescape(encodeURIComponent(s)));
+const dec = (b: string) => decodeURIComponent(escape(atob(b)));
+
+function jsonRes(code: number, body: unknown) {
+  return new Response(JSON.stringify(body, null, 2), {
+    status: code,
+    headers: { "content-type": "application/json" },
   });
 }
 
-function requireEnv() {
-  const missing: string[] = [];
-  if (!GH_OWNER) missing.push('GITHUB_OWNER');
-  if (!GH_REPO) missing.push('GITHUB_REPO');
-  if (!GH_TOKEN) missing.push('GITHUB_TOKEN');
-  if (!ADMIN_SECRET) missing.push('ADMIN_SECRET');
-  if (missing.length) {
-    throw new Error('Missing env: ' + missing.join(', '));
+async function gh<T>(path: string, init?: RequestInit): Promise<T> {
+  const r = await fetch(`https://api.github.com${path}`, {
+    ...init,
+    headers: {
+      Authorization: `Bearer ${GH_TOKEN}`,
+      Accept: "application/vnd.github+json",
+      "Content-Type": "application/json",
+      ...(init?.headers || {}),
+    },
+    cache: "no-store",
+  });
+  if (!r.ok) {
+    const text = await r.text();
+    throw new Error(`[write] ${r.status} ${text}`);
   }
+  return r.json() as Promise<T>;
 }
 
-function requireSecret(req: Request) {
-  const hdr = req.headers.get('x-admin-secret') || '';
-  if (hdr !== ADMIN_SECRET) throw new Error('Forbidden');
-}
-
-function pathFor(tenant: string) {
-  return `data/${tenant}/passwords.json`;
-}
-
-async function ghFetch(path: string, init?: RequestInit) {
-  const url = `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}${path}`;
-  const headers = {
-    'Authorization': `Bearer ${GH_TOKEN}`,
-    'Accept': 'application/vnd.github+json',
-    ...init?.headers as Record<string, string> ?? {}
-  };
-  const res = await fetch(url, { ...init, headers });
-  return res;
-}
-
-async function readJsonFromRepo(filePath: string, fallback: any) {
-  // read file + sha via contents API
-  const q = new URLSearchParams({ ref: GH_BRANCH }).toString();
-  const r = await ghFetch(`/contents/${filePath}?${q}`);
-  if (r.status === 404) return { data: fallback, sha: undefined };
-  if (!r.ok) throw new Error(`[read] ${r.status} ${await r.text()}`);
-  const js = await r.json();
-  const content = typeof js.content === 'string' ? atob(js.content.replace(/\n/g, '')) : '';
-  let parsed: any = fallback;
-  try { parsed = JSON.parse(content); } catch {}
-  return { data: parsed, sha: js.sha as string };
-}
-
-async function writeJsonToRepo(filePath: string, data: any, sha: string | undefined, message: string) {
-  const body = {
-    message,
-    content: btoa(unescape(encodeURIComponent(JSON.stringify(data, null, 2)))).replace(/=+$/,'') ,
-    branch: GH_BRANCH,
-    sha
-  } as any;
-  // when no sha (new file) GitHub ignores undefined, but some runtimes send it – strip explicitly
-  if (!sha) delete body.sha;
-  const r = await ghFetch(`/contents/${filePath}`, {
-    method: 'PUT',
-    body: JSON.stringify(body),
-    headers: { 'content-type': 'application/json' }
-  });
-  if (!r.ok) throw new Error(`[write] ${r.status} ${await r.text()}`);
-  return r.json();
-}
-
-// --- Handler ---
-export default async function handler(req: Request): Promise<Response> {
+export default async function handler(req: Request) {
   try {
-    requireEnv();
-
-    const { searchParams } = new URL(req.url);
-    const tenant = (searchParams.get('tenant') || '').trim();
-    if (!tenant) return jsonRes(400, { ok: false, error: 'tenant missing' });
-
-    // Allow a quick GET check
-    if (req.method === 'GET' && searchParams.get('mode') === 'selftest') {
-      return jsonRes(200, { ok: true, tenant, env: {
-        GITHUB_OWNER_present: !!GH_OWNER,
-        GITHUB_REPO_present: !!GH_REPO,
-        GITHUB_TOKEN_present: !!GH_TOKEN,
-      }});
+    // --- auth ---
+    const secret = req.headers.get("x-admin-secret") || "";
+    if (!ADMIN_SECRET || secret !== ADMIN_SECRET) {
+      return jsonRes(401, { ok: false, error: "unauthorized" });
     }
 
-    if (req.method !== 'POST') return jsonRes(405, { ok: false, error: 'POST required' });
+    // --- input ---
+    const url = new URL(req.url);
+    const tenantQ = url.searchParams.get("tenant") || "";
+    let username = "", password = "", tenant = tenantQ;
+    try {
+      const body = await req.json();
+      username = (body?.username || "").trim();
+      password = (body?.password || "").toString();
+      tenant = tenant || (body?.tenant || "").trim();
+    } catch { /* no body is ok for GET self-tests */ }
 
-    // Auth
-    try { requireSecret(req); } catch { return jsonRes(403, { ok: false, error: 'forbidden' }); }
+    if (!tenant) return jsonRes(400, { ok: false, error: "tenant missing" });
+    if (req.method !== "POST") return jsonRes(405, { ok: false, error: "POST only" });
+    if (!username || !password) return jsonRes(400, { ok: false, error: "invalid input" });
 
-    // Payload
-    let body: any = {};
-    try { body = await req.json(); } catch {}
-    const username = (body?.username || '').trim();
-    const password = (body?.password || '').trim();
-    if (!username || !password) return jsonRes(400, { ok: false, error: 'username/password missing' });
+    // --- paths ---
+    const path = `/repos/${GH_OWNER}/${GH_REPO}/contents/data/${tenant}/users.json`;
 
-    const filePath = pathFor(tenant);
-    const { data: map, sha } = await readJsonFromRepo(filePath, {});
-    (map as any)[username] = password;
-    await writeJsonToRepo(filePath, map, sha, `[qr-menu] set password for ${username}`);
+    // --- read existing file (may not exist on first run) ---
+    let sha = "";
+    let users: { allowed?: string[]; pending?: Record<string,string>; passwords?: Record<string,string> } = {
+      allowed: ["admin"],
+      pending: {},
+      passwords: {},
+    };
 
-    return jsonRes(200, { ok: true, tenant, user: username });
-  } catch (e: any) {
-    return jsonRes(500, { ok: false, error: String(e?.message || e) });
+    try {
+      const f = await gh<GHFile>(`${path}?ref=${encodeURIComponent(GH_BRANCH)}`);
+      const json = dec(f.content);
+      sha = f.sha;
+      try { users = JSON.parse(json) || users; } catch {}
+      users.allowed ||= ["admin"];
+      users.pending ||= {};
+      users.passwords ||= {};
+    } catch {
+      // file not found -> create new
+    }
+
+    // --- update password map ---
+    users.passwords![username] = password;
+
+    // --- write back (base64!) with sha if present ---
+    const content = enc(JSON.stringify(users, null, 2) + "\n");
+    const payload: any = {
+      message: `chore(${tenant}): set password for ${username}`,
+      content,
+      branch: GH_BRANCH,
+    };
+    if (sha) payload.sha = sha;
+
+    await gh(path, { method: "PUT", body: JSON.stringify(payload) });
+
+    return jsonRes(200, { ok: true });
+  } catch (err: any) {
+    return jsonRes(500, { ok: false, error: String(err?.message || err) });
   }
 }
