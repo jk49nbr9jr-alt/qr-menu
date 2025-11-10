@@ -1,140 +1,106 @@
-// Node runtime registration endpoint (no fs/path on edge)
-// Persists to GitHub repo: data/<tenant>/{users.json,pending.json}
+// api/users-register.ts
+// Node.js runtime (kein Edge), sauberer Body-Read, robustes Schreiben in pending.json
 
-import type { IncomingMessage, ServerResponse } from 'http';
-import { Buffer } from 'node:buffer';
+export const config = { runtime: "nodejs18.x" }; // oder "nodejs20.x" – nur KEIN "edge"
 
-export const config = { runtime: 'nodejs' } as const;
+type GitFile = { sha?: string; content?: string; encoding?: string };
+const OWNER   = process.env.GITHUB_OWNER!;
+const REPO    = process.env.GITHUB_REPO!;
+const BRANCH  = process.env.GITHUB_BRANCH || "main";
+const TOKEN   = process.env.GITHUB_TOKEN!;
 
-function sanitizeTenant(t?: string) {
-  const raw = (t || '').toString().trim().toLowerCase();
-  const clean = raw.replace(/[^a-z0-9._-]/g, '');
-  return clean || 'speisekarte';
+function b64(s: string) { return Buffer.from(s).toString("base64"); }
+function ub64(s: string) { return Buffer.from(s, "base64").toString("utf8"); }
+
+async function gh(path: string, init?: RequestInit) {
+  const r = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/contents/${path}?ref=${BRANCH}`, {
+    ...init,
+    headers: {
+      "Authorization": `Bearer ${TOKEN}`,
+      "Accept": "application/vnd.github+json",
+      ...init?.headers,
+    },
+    cache: "no-store",
+  });
+  return r;
 }
 
-function buildURL(req: IncomingMessage) {
-  const proto = (req.headers['x-forwarded-proto'] as string) || 'https';
-  const host  = (req.headers['x-forwarded-host'] as string) || (req.headers.host as string) || 'localhost';
-  const path  = typeof req.url === 'string' ? req.url : '/';
-  return new URL(`${proto}://${host}${path}`);
+async function readJson(path: string): Promise<{ json: any; sha?: string }> {
+  const r = await gh(path);
+  if (r.status === 404) return { json: {}, sha: undefined };
+  if (!r.ok) throw new Error(`[read] ${r.status} ${await r.text()}`);
+  const file = (await r.json()) as GitFile;
+  const raw = file.content ? ub64(file.content) : "{}";
+  let json: any = {};
+  try { json = JSON.parse(raw || "{}"); } catch { json = {}; }
+  return { json, sha: (file as any).sha };
 }
 
-async function readJsonBody<T = any>(req: IncomingMessage): Promise<T> {
-  const chunks: Buffer[] = [];
-  for await (const chunk of req) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-  const raw = Buffer.concat(chunks).toString('utf8') || '{}';
-  try { return JSON.parse(raw) as T; } catch { return {} as T; }
-}
-
-function json(res: ServerResponse, status: number, body: any) {
-  const data = JSON.stringify(body);
-  res.statusCode = status;
-  res.setHeader('Content-Type', 'application/json');
-  res.setHeader('Cache-Control', 'no-store');
-  res.end(data);
-}
-
-// --- GitHub helpers ---
-const GH_TOKEN  = process.env.GITHUB_TOKEN  || '';
-const GH_OWNER  = process.env.GITHUB_OWNER  || '';
-const GH_REPO   = process.env.GITHUB_REPO   || '';
-const GH_BRANCH = process.env.GITHUB_BRANCH || 'main';
-
-function ghUrl(p: string) {
-  const path = p.replace(/^\/+/, '');
-  return `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${path}?ref=${encodeURIComponent(GH_BRANCH)}`;
-}
-
-function b64encode(str: string) {
-  return Buffer.from(str, 'utf8').toString('base64');
-}
-function b64decode(b64: string) {
-  try { return Buffer.from(b64, 'base64').toString('utf8'); } catch { return ''; }
-}
-
-type UsersJson = { allowed: string[]; passwords: Record<string,string> };
-type PendingJson = Record<string,string>;
-type GitHubFile = { content: string; sha: string; encoding: string };
-
-async function ghReadJson<T>(repoPath: string, fallback: T): Promise<{ data: T; sha: string | null }> {
-  const url = ghUrl(repoPath);
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${GH_TOKEN}`, Accept: 'application/vnd.github+json' }, cache: 'no-store' });
-  if (res.status === 404) return { data: fallback, sha: null };
-  if (!res.ok) throw new Error(`GitHub read failed ${res.status}`);
-  const json: GitHubFile = await res.json() as any;
-  const txt = b64decode(json.content || '');
-  try { return { data: JSON.parse(txt) as T, sha: (json as any).sha || null }; } catch { return { data: fallback, sha: (json as any).sha || null }; }
-}
-
-async function ghWriteJson(repoPath: string, obj: any, message: string, sha: string | null) {
-  const url = ghUrl(repoPath);
+async function writeJson(path: string, next: any, sha?: string, message = "update via users-register") {
   const body = {
     message,
-    content: b64encode(JSON.stringify(obj, null, 2)),
-    branch: GH_BRANCH,
-    ...(sha ? { sha } : {})
-  } as any;
-  const res = await fetch(url, {
-    method: 'PUT',
-    headers: {
-      Authorization: `Bearer ${GH_TOKEN}`,
-      Accept: 'application/vnd.github+json',
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(body)
-  });
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(`GitHub write failed ${res.status}: ${text || res.statusText}`);
-  }
+    content: b64(JSON.stringify(next, null, 2)),
+    branch: BRANCH,
+    ...(sha ? { sha } : {}),
+  };
+  const r = await gh(path, { method: "PUT", body: JSON.stringify(body) });
+  if (!r.ok) throw new Error(`[write] ${r.status} ${await r.text()}`);
 }
 
-export default async function handler(req: IncomingMessage, res: ServerResponse) {
+export default async function handler(req: Request): Promise<Response> {
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ ok:false, error:"method not allowed" }), { status: 405 });
+  }
+
+  // Body lesen
+  let body: any = {};
+  try { body = await req.json(); } catch {}
+  const url = new URL(req.url);
+  // Tenant aus Body, sonst aus Query
+  const tenant = (body?.tenant || url.searchParams.get("tenant") || "").toString().trim();
+  let username = (body?.username || "").toString().trim();
+  const password = (body?.password || "").toString();
+
+  if (!tenant) return new Response(JSON.stringify({ ok:false, error:"tenant missing" }), { status: 400 });
+  if (!username || !password) return new Response(JSON.stringify({ ok:false, error:"invalid" }), { status: 400 });
+
+  // Username normalisieren (z. B. "Test " -> "test")
+  username = username.toLowerCase();
+
+  // Pfade
+  const usersPath   = `data/${tenant}/users.json`;
+  const pendingPath = `data/${tenant}/pending.json`;
+
   try {
-    if (req.method !== 'POST') {
-      res.statusCode = 405;
-      res.setHeader('Allow', 'POST');
-      return res.end('Method not allowed');
+    // users.json lesen (allowed-Liste)
+    const { json: usersJson } = await readJson(usersPath);
+    const allowed: string[] = Array.isArray(usersJson) ? usersJson : (usersJson?.allowed || usersJson || []);
+    // pending.json lesen
+    const { json: pendingJson, sha: pendingSha } = await readJson(pendingPath);
+    const pending: Record<string,string> = pendingJson && typeof pendingJson === "object" ? pendingJson : {};
+
+    // Prüfungen
+    if (allowed.includes(username)) {
+      return new Response(JSON.stringify({ ok:false, error:"exists" }), { status: 409 });
+    }
+    if (pending[username]) {
+      return new Response(JSON.stringify({ ok:false, error:"pending" }), { status: 409 });
     }
 
-    if (!GH_TOKEN || !GH_OWNER || !GH_REPO) {
-      return json(res, 500, { ok: false, error: 'server-misconfigured' });
-    }
+    // Eintragen
+    pending[username] = password;
 
-    const url  = buildURL(req);
-    const body = await readJsonBody<{ username?: string; password?: string; tenant?: string }>(req);
+    // Schreiben (mit/ohne sha)
+    await writeJson(
+      pendingPath,
+      pending,
+      pendingSha,
+      `register ${username} -> data/${tenant}/pending.json`
+    );
 
-    const tenant = sanitizeTenant(body.tenant || url.searchParams.get('tenant') || undefined);
-    const u = (body.username || '').toString().trim();
-    const p = (body.password || '').toString();
-
-    if (!u || !p || u.toLowerCase() === 'admin') {
-      return json(res, 400, { ok: false, error: 'invalid' });
-    }
-
-    const usersPath   = `data/${tenant}/users.json`;
-    const pendingPath = `data/${tenant}/pending.json`;
-
-    const { data: usersData,   sha: usersSha }   = await ghReadJson<UsersJson>(usersPath, { allowed: ['admin'], passwords: {} });
-    const { data: pendingData, sha: pendingSha } = await ghReadJson<PendingJson>(pendingPath, {});
-
-    if (usersData.allowed.includes(u)) {
-      return json(res, 400, { ok: false, error: 'exists' });
-    }
-    if (pendingData[u]) {
-      return json(res, 400, { ok: false, error: 'pending' });
-    }
-
-    const nextPending = { ...pendingData, [u]: p };
-    await ghWriteJson(pendingPath, nextPending, `feat(api): register pending user ${u} for ${tenant}`, pendingSha);
-
-    if (usersSha === null) {
-      await ghWriteJson(usersPath, usersData, `chore(api): init users.json for ${tenant}`, null);
-    }
-
-    return json(res, 200, { ok: true });
-  } catch (e: any) {
-    console.error('[api/users-register] CRASH', e);
-    return json(res, 500, { ok: false, error: 'handler-crash', message: String(e?.message || e) });
+    return new Response(JSON.stringify({ ok:true, tenant, pendingUser: username }), { status: 200 });
+  } catch (err: any) {
+    console.error("[users-register] failed:", err);
+    return new Response(JSON.stringify({ ok:false, error:String(err?.message || err) }), { status: 500 });
   }
 }
