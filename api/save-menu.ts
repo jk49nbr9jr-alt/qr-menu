@@ -1,5 +1,5 @@
 // api/save-menu.ts
-export const config = { runtime: "edge" };
+export const config = { runtime: "nodejs" };
 
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN!;
 const OWNER = process.env.GITHUB_OWNER!;
