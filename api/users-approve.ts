@@ -19,19 +19,16 @@ const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST,OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type,x-admin-secret",
+  "Cache-Control": "no-store",
 };
 
 function ok(data: any, init: ResponseInit = {}) {
-  return new Response(JSON.stringify({ ok: true, ...data }), {
-    status: 200,
-    headers: { "Content-Type": "application/json", ...CORS, ...(init.headers || {}) },
-  });
+  const headers = { "Content-Type": "application/json", ...CORS, ...(init.headers || {}) } as Record<string,string>;
+  return new Response(JSON.stringify({ ok: true, ...data }), { status: init.status ?? 200, headers });
 }
 function err(status: number, message: string, details?: any) {
-  return new Response(JSON.stringify({ ok: false, error: message, details }), {
-    status,
-    headers: { "Content-Type": "application/json", ...CORS },
-  });
+  const payload = { ok: false, error: message, details };
+  return new Response(JSON.stringify(payload), { status, headers: { "Content-Type": "application/json", ...CORS } });
 }
 
 function sanitizeTenant(input?: string) {
@@ -41,6 +38,7 @@ function sanitizeTenant(input?: string) {
 }
 
 function requireSecret(req: any) {
+  // do not log secret – only presence
   const expected = process.env.VITE_ADMIN_SECRET || process.env.ADMIN_SECRET || "";
   if (!expected) return false;
 
@@ -86,6 +84,7 @@ async function gh<T>(url: string, init?: RequestInit): Promise<T> {
   });
   if (!r.ok) {
     const text = await r.text().catch(() => "");
+    console.error("[users-approve] GitHub API error", r.status, text || r.statusText);
     throw new Error(`GitHub ${r.status}: ${text || r.statusText}`);
   }
   return (await r.json()) as T;
@@ -145,8 +144,8 @@ export default async function handler(req: any) {
   if (req.method === "OPTIONS") return new Response("ok", { status: 200, headers: CORS });
 
   const url = getURL(req);
+  console.log("[users-approve]", req.method, url.toString());
 
-  // Optional: quick debug to verify env/paths from the browser
   if (req.method === "GET") {
     const tenant = sanitizeTenant(url.searchParams.get("tenant") ?? undefined);
     const usersPath = `data/${tenant}/users.json`;
@@ -154,24 +153,36 @@ export default async function handler(req: any) {
     const mode = url.searchParams.get("mode") || "info";
 
     if (mode === "selftest") {
+      // do NOT expose secrets – only presence and whether a header was provided
+      const expectedPresent = !!(process.env.VITE_ADMIN_SECRET || process.env.ADMIN_SECRET);
+      const hdr = req?.headers || {};
+      const provided = typeof hdr.get === "function"
+        ? !!(hdr.get("x-admin-secret") || hdr.get("X-Admin-Secret"))
+        : !!Object.keys(hdr || {}).find(k => k.toLowerCase() === "x-admin-secret");
+
       return ok({
-        tenant,
         mode,
+        tenant,
+        paths: { usersPath, pendingPath },
         env: {
           GITHUB_OWNER_present: !!GH_OWNER,
           GITHUB_REPO_present: !!GH_REPO,
           GITHUB_TOKEN_present: !!GH_TOKEN,
+          ADMIN_SECRET_present: expectedPresent,
         },
-        paths: { usersPath, pendingPath },
+        authHeaderProvided: provided,
         now: Date.now(),
       });
     }
 
-    return ok({ tenant, paths: { usersPath, pendingPath } });
+    return ok({ tenant, paths: { usersPath, pendingPath }, now: Date.now() });
   }
 
   if (req.method !== "POST") return err(405, "method-not-allowed");
-  if (!requireSecret(req)) return err(401, "unauthorized");
+  if (!requireSecret(req)) {
+    console.warn("[users-approve] unauthorized – missing/invalid x-admin-secret header");
+    return err(401, "unauthorized", { reason: "missing-or-invalid-x-admin-secret" });
+  }
 
   if (!GH_OWNER || !GH_REPO || !GH_TOKEN) {
     return err(500, "missing-github-config", {
@@ -239,7 +250,7 @@ export default async function handler(req: any) {
       message: String(e?.message || e),
       stack: e?.stack || null,
       url: url.toString(),
-      context: { usersPath, pendingPath, tenant, username },
+      context: { usersPath, pendingPath, tenant, username, method: req.method },
     });
   }
 }
