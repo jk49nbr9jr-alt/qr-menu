@@ -1045,21 +1045,14 @@ function AdminApp() {
     }
   }
 
-  if (!authed) {
-    return (
-      <div className="min-h-screen grid place-items-center bg-neutral-50 text-neutral-900 p-4">
-        <form onSubmit={login} className="w-full max-w-sm rounded-xl border bg-white p-4 grid gap-3">
-          <div className="text-lg font-semibold">Admin Login</div>
-          <label className="text-sm">
-            <div>Passwort</div>
-            <Input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="admin123" />
-          </label>
-          <PrimaryBtn type="submit">Anmelden</PrimaryBtn>
-          <div className="text-xs text-neutral-500">Hinweis: Demo-Login ohne Backend. Passwort in App-Code (ADMIN_PASSWORD) änderbar.</div>
-        </form>
-      </div>
-    );
-  }
+  // Redirect unauthenticated admins to public page (use the regular login modal there)
+  useEffect(() => {
+    if (!authed) {
+      window.location.hash = "/";
+    }
+  }, [authed]);
+
+  if (!authed) return null;
 
   return (
     <div className="min-h-screen bg-neutral-50 text-neutral-900">
@@ -1120,51 +1113,51 @@ function AdminApp() {
               Logout
             </Button>
           </div>
-          {/* Mobile actions (chips) */}
-          <div className="sm:hidden w-full pt-2">
-            <div className="max-w-5xl mx-auto px-3 pb-2 overflow-x-auto flex gap-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {isSuperAdmin && (
-                <>
-                  <Button
-                    pill
-                    className="px-4 py-2 whitespace-nowrap"
-                    onClick={async () => {
-                      const j = await apiUsersGet(getTenantKey());
-                      setUsersList(j.allowed || []);
-                      setUsersOpen(true);
-                    }}
-                  >
-                    Benutzer ({usersList.length})
-                  </Button>
-                  <Button
-                    pill
-                    className="px-4 py-2 whitespace-nowrap"
-                    onClick={async () => {
-                      const j = await apiUsersGet(getTenantKey());
-                      setPendingUsers(j.pending || {});
-                      setPendingOpen(true);
-                    }}
-                  >
-                    Anträge ({Object.keys(pendingUsers || {}).length})
-                  </Button>
-                </>
-              )}
-              <Button pill className="px-4 py-2 whitespace-nowrap" onClick={changePassword}>Passwort ändern</Button>
-              <Button
-                pill
-                className="px-4 py-2 whitespace-nowrap"
-                onClick={() => {
-                  sessionStorage.removeItem(ADMIN_TOKEN_KEY);
-                  sessionStorage.removeItem(ADMIN_USER_KEY);
-                  setAuthed(false);
-                  setUsername("");
-                  window.location.hash = "/";
-                }}
-              >
-                Logout
-              </Button>
-            </div>
+        {/* Mobile actions (chips) */}
+        <div className="sm:hidden border-t">
+          <div className="max-w-5xl mx-auto px-3 pb-2 pt-2 overflow-x-auto flex gap-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {isSuperAdmin && (
+              <>
+                <Button
+                  pill
+                  className="px-4 py-2 whitespace-nowrap"
+                  onClick={async () => {
+                    const j = await apiUsersGet(getTenantKey());
+                    setUsersList(j.allowed || []);
+                    setUsersOpen(true);
+                  }}
+                >
+                  Benutzer ({usersList.length})
+                </Button>
+                <Button
+                  pill
+                  className="px-4 py-2 whitespace-nowrap"
+                  onClick={async () => {
+                    const j = await apiUsersGet(getTenantKey());
+                    setPendingUsers(j.pending || {});
+                    setPendingOpen(true);
+                  }}
+                >
+                  Anträge ({Object.keys(pendingUsers || {}).length})
+                </Button>
+              </>
+            )}
+            <Button pill className="px-4 py-2 whitespace-nowrap" onClick={changePassword}>Passwort ändern</Button>
+            <Button
+              pill
+              className="px-4 py-2 whitespace-nowrap"
+              onClick={() => {
+                sessionStorage.removeItem(ADMIN_TOKEN_KEY);
+                sessionStorage.removeItem(ADMIN_USER_KEY);
+                setAuthed(false);
+                setUsername("");
+                window.location.hash = "/";
+              }}
+            >
+              Logout
+            </Button>
           </div>
+        </div>
           {/* Benutzerverwaltung modal */}
           {isSuperAdmin && usersOpen && (
             <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center">
