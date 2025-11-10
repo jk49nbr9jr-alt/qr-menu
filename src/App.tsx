@@ -155,7 +155,6 @@ const Editor: React.FC<EditorProps> = ({ open, item, menu, onClose, onSave }) =>
   }, []);
 
   const existingCats = useMemo(() => Array.from(new Set((menu ?? []).map(i => i.category))), [menu]);
-  const NEW = "__NEW_CATEGORY__";
 
   if (!open) return null;
   return (
