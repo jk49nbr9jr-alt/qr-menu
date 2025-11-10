@@ -1017,6 +1017,7 @@ function AdminApp() {
             <span className="text-sm text-neutral-600">– Admin</span>
           </div>
           <div className="flex items-center gap-3">
+            {/* Only show these sections for super admin */}
             {isSuperAdmin && (
               <>
                 <Button
@@ -1053,48 +1054,49 @@ function AdminApp() {
               Logout
             </Button>
           </div>
-      {isSuperAdmin && usersOpen && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center">
-          <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
-            <div className="p-4 border-b flex items-center justify-between">
-              <div className="font-semibold">Benutzerverwaltung</div>
-              <Button onClick={() => setUsersOpen(false)}>Schließen</Button>
+          {/* Benutzerverwaltung modal: only for super admin */}
+          {isSuperAdmin && usersOpen && (
+            <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center">
+              <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
+                <div className="p-4 border-b flex items-center justify-between">
+                  <div className="font-semibold">Benutzerverwaltung</div>
+                  <Button onClick={() => setUsersOpen(false)}>Schließen</Button>
+                </div>
+                <div className="p-2 max-h-[70vh] overflow-auto">
+                  {usersList.length === 0 ? (
+                    <div className="p-3 text-sm text-neutral-500">Keine Benutzer vorhanden.</div>
+                  ) : (
+                    usersList.map((u) => (
+                      <div key={u} className="flex items-center justify-between border-b px-3 py-2">
+                        <div className="font-medium">
+                          {u}
+                          { (sessionStorage.getItem(ADMIN_USER_KEY) || username) === u ? <span className="ml-2 text-xs text-neutral-500">(angemeldet)</span> : null }
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            className="rounded-full px-3 py-1 text-sm"
+                            onClick={() => resetPasswordFor(u)}
+                            pill
+                          >
+                            Passwort zurücksetzen
+                          </Button>
+                          {u !== "admin" && (sessionStorage.getItem(ADMIN_USER_KEY) || username) !== u && (
+                            <Button
+                              className="rounded-full px-3 py-1 text-sm text-red-600 border-red-300 hover:bg-red-50"
+                              onClick={() => deleteUser(u)}
+                              pill
+                            >
+                              Löschen
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
             </div>
-            <div className="p-2 max-h-[70vh] overflow-auto">
-              {usersList.length === 0 ? (
-                <div className="p-3 text-sm text-neutral-500">Keine Benutzer vorhanden.</div>
-              ) : (
-                usersList.map((u) => (
-                  <div key={u} className="flex items-center justify-between border-b px-3 py-2">
-                    <div className="font-medium">
-                      {u}
-                      { (sessionStorage.getItem(ADMIN_USER_KEY) || username) === u ? <span className="ml-2 text-xs text-neutral-500">(angemeldet)</span> : null }
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        className="rounded-full px-3 py-1 text-sm"
-                        onClick={() => resetPasswordFor(u)}
-                        pill
-                      >
-                        Passwort zurücksetzen
-                      </Button>
-                      {u !== "admin" && (sessionStorage.getItem(ADMIN_USER_KEY) || username) !== u && (
-                        <Button
-                          className="rounded-full px-3 py-1 text-sm text-red-600 border-red-300 hover:bg-red-50"
-                          onClick={() => deleteUser(u)}
-                          pill
-                        >
-                          Löschen
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+          )}
         </div>
         <div className="border-t">
           <div className="max-w-5xl mx-auto p-3 flex flex-wrap items-center gap-2">
@@ -1324,6 +1326,7 @@ function AdminApp() {
         © {new Date().getFullYear()} QR-Speisekarte Urixsoft
       </footer>
 
+      {/* Anträge modal: only for super admin */}
       {isSuperAdmin && pendingOpen && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center">
           <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
