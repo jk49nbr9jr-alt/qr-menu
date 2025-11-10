@@ -137,6 +137,23 @@ const Editor: React.FC<EditorProps> = ({ open, item, menu, onClose, onSave }) =>
     setDraft(item || { id: Math.random().toString(36).slice(2,9), name: "", desc: "", price: 0, img: "", category: "Burger" });
   }, [item, open]);
 
+  const [catOpen, setCatOpen] = useState(false);
+  const catBoxRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    function onDocClick(e: MouseEvent) {
+      if (!catBoxRef.current) return;
+      if (!(e.target instanceof Node)) return;
+      if (!catBoxRef.current.contains(e.target)) setCatOpen(false);
+    }
+    function onEsc(e: KeyboardEvent) { if (e.key === 'Escape') setCatOpen(false); }
+    document.addEventListener('mousedown', onDocClick);
+    document.addEventListener('keydown', onEsc);
+    return () => {
+      document.removeEventListener('mousedown', onDocClick);
+      document.removeEventListener('keydown', onEsc);
+    };
+  }, []);
+
   const existingCats = useMemo(() => Array.from(new Set((menu ?? []).map(i => i.category))), [menu]);
   const NEW = "__NEW_CATEGORY__";
 
@@ -185,24 +202,51 @@ const Editor: React.FC<EditorProps> = ({ open, item, menu, onClose, onSave }) =>
           </label>
           <label className="text-sm">
             <div>Kategorie</div>
-            <select
-              className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black/10"
-              value={existingCats.includes(draft.category) ? draft.category : NEW}
-              onChange={(e) => {
-                const v = e.target.value;
-                if (v === NEW) {
-                  // Umschalten auf Eingabe einer neuen Kategorie
-                  setDraft({ ...draft, category: "" });
-                } else {
-                  setDraft({ ...draft, category: v });
-                }
-              }}
-            >
-              {existingCats.map((cat) => (
-                <option key={cat} value={cat}>{cat}</option>
-              ))}
-              <option value={NEW}>+ Neue Kategorie hinzufügen</option>
-            </select>
+            <div ref={catBoxRef} className="relative">
+              {/* Trigger */}
+              <button
+                type="button"
+                onClick={() => setCatOpen(v => !v)}
+                className="mt-1 w-full inline-flex items-center justify-between rounded-full border border-neutral-300 bg-white px-4 py-2 text-sm hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-black/10"
+                aria-haspopup="listbox"
+                aria-expanded={catOpen}
+              >
+                <span className="truncate">
+                  {existingCats.includes(draft.category) && draft.category
+                    ? draft.category
+                    : draft.category
+                      ? `Neue Kategorie: ${draft.category}`
+                      : 'Kategorie wählen'}
+                </span>
+                <span className="ml-3 text-neutral-400">▾</span>
+              </button>
+
+              {/* Popover */}
+              {catOpen && (
+                <div className="absolute z-20 mt-2 w-full rounded-xl border bg-white shadow-lg max-h-60 overflow-auto">
+                  {existingCats.map((catOpt) => (
+                    <button
+                      key={catOpt}
+                      type="button"
+                      className={`w-full text-left px-4 py-2 hover:bg-neutral-50 ${draft.category === catOpt ? 'bg-neutral-100 font-medium' : ''}`}
+                      onClick={() => { setDraft({ ...draft, category: catOpt }); setCatOpen(false); }}
+                    >
+                      {catOpt}
+                    </button>
+                  ))}
+                  <div className="border-t" />
+                  <button
+                    type="button"
+                    className="w-full text-left px-4 py-2 text-amber-700 hover:bg-amber-50"
+                    onClick={() => { setDraft({ ...draft, category: '' }); setCatOpen(false); }}
+                  >
+                    + Neue Kategorie hinzufügen
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Inline-Input, falls es eine neue Kategorie ist */}
             {!existingCats.includes(draft.category) && (
               <div className="mt-2">
                 <Input
