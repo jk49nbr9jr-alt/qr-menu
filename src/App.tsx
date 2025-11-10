@@ -57,8 +57,34 @@ const LOGO_SRC = "/logo.png";
 const ADMIN_TOKEN_KEY = "qrmenu.admin.token";
 const ADMIN_USER_KEY = "qrmenu.admin.user";
 const ADMIN_PASSWORD = "admin123"; // Demo-Passwort – später ersetzen
-const ALLOWED_USERS = ["admin"];
+const ALLOWED_USERS_KEY = "qrmenu.allowed.users";
+const PENDING_USERS_KEY = "qrmenu.pending.users";
 const PASSWORDS_KEY = "qrmenu.passwords";
+// -------- User-Store-Helpers --------
+function loadAllowedUsers(): string[] {
+  try {
+    const raw = localStorage.getItem(ALLOWED_USERS_KEY);
+    const arr = raw ? JSON.parse(raw) : null;
+    const def = ["admin"];
+    if (!Array.isArray(arr)) return def;
+    if (!arr.includes("admin")) arr.push("admin");
+    return arr;
+  } catch { return ["admin"]; }
+}
+function saveAllowedUsers(list: string[]) {
+  const set = Array.from(new Set([...list, "admin"]));
+  localStorage.setItem(ALLOWED_USERS_KEY, JSON.stringify(set));
+}
+function loadPendingUsers(): Record<string,string> {
+  try {
+    const raw = localStorage.getItem(PENDING_USERS_KEY);
+    const obj = raw ? JSON.parse(raw) : null;
+    return obj && typeof obj === "object" ? obj : {};
+  } catch { return {}; }
+}
+function savePendingUsers(map: Record<string,string>) {
+  localStorage.setItem(PENDING_USERS_KEY, JSON.stringify(map));
+}
 // -------- Passwort-Storage-Helpers --------
 function loadPasswords(): Record<string, string> {
   try {
@@ -297,6 +323,13 @@ function PublicApp() {
     return () => window.removeEventListener('scroll', handler);
   }, [categories, cat]);
 
+  // --- Registration Modal State ---
+  const [registerOpen, setRegisterOpen] = useState(false);
+  const [regUsername, setRegUsername] = useState("");
+  const [regPassword, setRegPassword] = useState("");
+  const [regError, setRegError] = useState<string | null>(null);
+  const [regDone, setRegDone] = useState(false);
+
   // --- Login Modal Handler ---
   function handleLoginSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -307,7 +340,8 @@ function PublicApp() {
       setLoginError("Bitte Benutzername und Passwort eingeben.");
       return;
     }
-    if (!ALLOWED_USERS.includes(username)) {
+    const allowed = loadAllowedUsers();
+    if (!allowed.includes(username)) {
       setLoginError("Unbekannter Benutzer.");
       return;
     }
@@ -350,6 +384,13 @@ function PublicApp() {
             >
               Anmelden
             </Button>
+            <Button
+              className="ml-2 rounded-full border border-neutral-300 px-6 py-2 text-sm hover:bg-neutral-100 active:bg-neutral-200"
+              onClick={() => { setRegisterOpen(true); setRegError(null); setRegDone(false); }}
+              pill
+            >
+              Registrieren
+            </Button>
           </div>
         </div>
       </header>
@@ -387,6 +428,56 @@ function PublicApp() {
                 <Button type="button" onClick={() => { setLoginOpen(false); setLoginError(null); }}>Abbrechen</Button>
                 <PrimaryBtn type="submit">Login</PrimaryBtn>
               </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {registerOpen && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center">
+          <div className="w-full max-w-sm rounded-xl bg-white shadow-xl">
+            <div className="p-4 border-b flex items-center justify-between">
+              <div className="font-semibold">Zugang beantragen</div>
+              <Button onClick={() => setRegisterOpen(false)}>Schließen</Button>
+            </div>
+            <form
+              className="p-4 grid gap-3"
+              onSubmit={(e) => {
+                e.preventDefault();
+                setRegError(null);
+                const u = regUsername.trim();
+                const p = regPassword;
+                if (!u || !p) { setRegError("Bitte Benutzername und Passwort eingeben."); return; }
+                if (u.toLowerCase() === "admin") { setRegError("Dieser Benutzername ist reserviert."); return; }
+                const allowed = loadAllowedUsers();
+                const pending = loadPendingUsers();
+                if (allowed.includes(u)) { setRegError("Benutzer existiert bereits."); return; }
+                if (pending[u]) { setRegError("Es liegt bereits eine Anfrage vor."); return; }
+                pending[u] = p;
+                savePendingUsers(pending);
+                setRegDone(true);
+              }}
+            >
+              {!regDone ? (
+                <>
+                  <label className="text-sm">
+                    <div>Benutzername</div>
+                    <Input value={regUsername} onChange={e => setRegUsername(e.target.value)} placeholder="mein-name" />
+                  </label>
+                  <label className="text-sm">
+                    <div>Passwort</div>
+                    <Input type="password" value={regPassword} onChange={e => setRegPassword(e.target.value)} placeholder="Passwort" />
+                  </label>
+                  {regError && <div className="text-xs text-red-600">{regError}</div>}
+                  <div className="flex items-center justify-end gap-2 pt-2">
+                    <Button type="button" onClick={() => setRegisterOpen(false)}>Abbrechen</Button>
+                    <PrimaryBtn type="submit">Antrag senden</PrimaryBtn>
+                  </div>
+                </>
+              ) : (
+                <div className="text-sm p-2">
+                  Antrag wurde übermittelt. Ein Admin muss die Registrierung freigeben.
+                </div>
+              )}
             </form>
           </div>
         </div>
@@ -540,6 +631,9 @@ function PublicApp() {
 
 /* ---------- Admin-Bereich unter /admin ---------- */
 function AdminApp() {
+  // --- Pending Users State ---
+  const [pendingUsers, setPendingUsers] = useState<Record<string,string>>(() => loadPendingUsers());
+  const [pendingOpen, setPendingOpen] = useState(false);
   const [menu, setMenu] = useState<MenuItem[] | null>(null);
   const [cat, setCat] = useState("");
   const [search, setSearch] = useState("");
@@ -844,6 +938,13 @@ function AdminApp() {
             <span className="text-sm text-neutral-600">– Admin</span>
           </div>
           <div className="flex items-center gap-3">
+            <Button
+              className="rounded-full border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-100 active:bg-neutral-200"
+              onClick={() => { setPendingUsers(loadPendingUsers()); setPendingOpen(true); }}
+              pill
+            >
+              Anträge ({Object.keys(pendingUsers || {}).length})
+            </Button>
             <span className="text-sm text-neutral-700">
               {sessionStorage.getItem(ADMIN_USER_KEY) || username || "admin"}
             </span>
@@ -1090,6 +1191,61 @@ function AdminApp() {
       <footer className="text-center py-4 text-sm text-neutral-500 border-t mt-6">
         © {new Date().getFullYear()} QR-Speisekarte Urixsoft
       </footer>
+
+      {pendingOpen && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center">
+          <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
+            <div className="p-4 border-b flex items-center justify-between">
+              <div className="font-semibold">Ausstehende Zugänge</div>
+              <Button onClick={() => setPendingOpen(false)}>Schließen</Button>
+            </div>
+            <div className="p-2 max-h-[70vh] overflow-auto">
+              {Object.keys(pendingUsers).length === 0 ? (
+                <div className="p-3 text-sm text-neutral-500">Keine Anträge vorhanden.</div>
+              ) : (
+                Object.entries(pendingUsers).map(([u, pwd]) => (
+                  <div key={u} className="flex items-center justify-between border-b px-3 py-2">
+                    <div className="font-medium">{u}</div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        className="rounded-full px-3 py-1 text-sm"
+                        onClick={() => {
+                          // approve
+                          const allowed = loadAllowedUsers();
+                          if (!allowed.includes(u)) {
+                            allowed.push(u);
+                            saveAllowedUsers(allowed);
+                          }
+                          const pwMap = loadPasswords();
+                          pwMap[u] = pwd;
+                          savePasswords(pwMap);
+                          const next = { ...pendingUsers }; delete next[u];
+                          savePendingUsers(next);
+                          setPendingUsers(next);
+                        }}
+                        pill
+                      >
+                        Freigeben
+                      </Button>
+                      <Button
+                        className="rounded-full px-3 py-1 text-sm text-red-600 border-red-300 hover:bg-red-50"
+                        onClick={() => {
+                          const next = { ...pendingUsers }; delete next[u];
+                          savePendingUsers(next);
+                          setPendingUsers(next);
+                        }}
+                        pill
+                      >
+                        Ablehnen
+                      </Button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Editor */}
       <Editor
