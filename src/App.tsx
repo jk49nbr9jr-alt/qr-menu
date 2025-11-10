@@ -68,14 +68,6 @@ function loadPasswords(): Record<string, string> {
 function savePasswords(map: Record<string, string>) {
   localStorage.setItem(PASSWORDS_KEY, JSON.stringify(map));
 }
-function getPasswordForUser(username: string): string {
-  if (username === "admin") {
-    const map = loadPasswords();
-    return map[username] || ADMIN_PASSWORD;
-  }
-  const map = loadPasswords();
-  return map[username] || "";
-}
 const HEADER_H = 64; // fixe Höhe des fixierten Headers (px)
 
 /* ---------- Tenant-Helfer ---------- */
