@@ -112,7 +112,7 @@ async function serverReject(username: string) {
 }
 async function serverSetPassword(username: string, password: string) {
   const tenant = getTenantKey();
-  const r = await fetch("/api/users-set-password", {
+  const r = await fetch(`/api/users-set-password?tenant=${encodeURIComponent(tenant)}`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-admin-secret": ADMIN_SECRET },
     body: JSON.stringify({ tenant, username, password }),
