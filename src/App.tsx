@@ -558,6 +558,19 @@ function AdminApp() {
   const catRef = useRef<HTMLDivElement | null>(null);
   const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
   const toolbarRef = useRef<HTMLDivElement | null>(null);
+  // --- Dynamic header height ---
+  const headerRef = useRef<HTMLDivElement | null>(null);
+  const [headerH, setHeaderH] = useState<number>(HEADER_H);
+  useEffect(() => {
+    const measure = () => setHeaderH(headerRef.current?.offsetHeight || HEADER_H);
+    measure();
+    window.addEventListener("resize", measure);
+    window.addEventListener("load", measure);
+    return () => {
+      window.removeEventListener("resize", measure);
+      window.removeEventListener("load", measure);
+    };
+  }, []);
   function alignActiveCatLeftAdmin() {
     const container = catRef.current;
     if (!container) return;
@@ -572,7 +585,7 @@ function AdminApp() {
   function scrollToCategory(targetCat: string) {
     const el = sectionRefs.current[targetCat];
     if (!el) return;
-    const toolbarH = (toolbarRef.current?.offsetHeight || 0) + HEADER_H;
+    const toolbarH = (toolbarRef.current?.offsetHeight || 0) + headerH;
     const y = el.getBoundingClientRect().top + window.scrollY - toolbarH - 8;
     window.scrollTo({ top: y, behavior: 'smooth' });
   }
@@ -647,7 +660,7 @@ function AdminApp() {
   useEffect(() => {
     if (!categories.length) return;
     const handler = () => {
-      const toolbarH = (toolbarRef.current?.offsetHeight || 0) + HEADER_H; // sticky header + Toolbar (fixed)
+      const toolbarH = (toolbarRef.current?.offsetHeight || 0) + headerH; // sticky header + Toolbar (fixed)
       const y = window.scrollY + toolbarH + 8; // Referenzlinie knapp unter der Toolbar
       let bestCat: string | null = null;
       let bestDist = Infinity;
@@ -671,7 +684,7 @@ function AdminApp() {
     // Initial ausführen, damit beim Laden sofort die korrekte Kategorie aktiv ist
     handler();
     return () => window.removeEventListener('scroll', handler);
-  }, [categories, cat]);
+  }, [categories, cat, headerH]);
 
   function addItem() { setEditTarget(null); setEditorOpen(true); }
   function deleteItem(id: string) {
@@ -781,7 +794,7 @@ function AdminApp() {
 
   return (
     <div className="min-h-screen bg-neutral-50 text-neutral-900">
-      <header className="fixed top-0 left-0 right-0 z-50 bg-white border-b">
+      <header ref={headerRef} className="fixed top-0 left-0 right-0 z-50 bg-white border-b">
         <div className="max-w-5xl mx-auto flex justify-between items-center p-4">
           <div className="flex items-center gap-3">
             <img src={LOGO_SRC} alt={BRAND_TITLE} className="h-7 sm:h-8 w-auto" />
@@ -839,7 +852,7 @@ function AdminApp() {
           </div>
         </div>
       </header>
-      <div style={{ height: HEADER_H }} />
+      <div style={{ height: headerH }} />
       {searchOpen && (
         <div className="border-b bg-white">
           <div className="max-w-5xl mx-auto p-3">
@@ -861,7 +874,7 @@ function AdminApp() {
             {/* Kategorien-Toolbar (Admin) */}
             <div
               className="mb-4 -mx-4 px-4 sticky z-40 bg-white/95 backdrop-blur"
-              style={{ top: HEADER_H }}
+              style={{ top: headerH }}
               ref={toolbarRef}
             >
               <div className="flex items-center gap-3">
