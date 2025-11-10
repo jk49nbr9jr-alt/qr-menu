@@ -555,6 +555,9 @@ function AdminApp() {
   // --- Toolbar/Category Scroll State ---
   const [navOpen, setNavOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  // --- Drag & Drop state for categories
+  const [dragCat, setDragCat] = useState<string | null>(null);
+  const [dragOverCat, setDragOverCat] = useState<string | null>(null);
   const catRef = useRef<HTMLDivElement | null>(null);
   const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
   const toolbarRef = useRef<HTMLDivElement | null>(null);
@@ -773,6 +776,18 @@ function AdminApp() {
     setCat(name);
   }
 
+  function moveCategoryByDnD(fromCat: string, toCat: string) {
+    if (!fromCat || !toCat || fromCat === toCat) return;
+    const order = [...categories];
+    const from = order.indexOf(fromCat);
+    const to = order.indexOf(toCat);
+    if (from < 0 || to < 0 || from === to) return;
+    // splice-move
+    order.splice(to, 0, order.splice(from, 1)[0]);
+    reorderMenuByCategories(order);
+    setCat(fromCat);
+  }
+
 
   function login(e: React.FormEvent) {
     e.preventDefault();
@@ -984,32 +999,47 @@ function AdminApp() {
                     {categories.map((c) => (
                       <div
                         key={c}
+                        draggable
+                        onDragStart={(e) => {
+                          setDragCat(c);
+                          e.dataTransfer.effectAllowed = "move";
+                          // Firefox needs data
+                          e.dataTransfer.setData("text/plain", c);
+                        }}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          if (dragOverCat !== c) setDragOverCat(c);
+                        }}
+                        onDragEnter={(e) => {
+                          e.preventDefault();
+                          if (dragOverCat !== c) setDragOverCat(c);
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          const from = dragCat;
+                          setDragCat(null);
+                          setDragOverCat(null);
+                          if (from) moveCategoryByDnD(from, c);
+                        }}
+                        onDragEnd={() => {
+                          setDragCat(null);
+                          setDragOverCat(null);
+                        }}
                         className={
-                          "w-full px-4 py-3 border-b hover:bg-neutral-50 flex items-center justify-between " +
-                          (cat === c ? "bg-neutral-100" : "")
+                          "w-full px-4 py-3 border-b flex items-center justify-between cursor-grab active:cursor-grabbing " +
+                          (cat === c ? "bg-neutral-100 " : "hover:bg-neutral-50 ") +
+                          (dragOverCat === c ? "ring-2 ring-amber-400 ring-offset-0" : "")
                         }
+                        title="Zum Verschieben ziehen"
                       >
-                        <button
-                          className={"text-left flex-1 " + (cat === c ? "font-semibold" : "")}
+                        <div
+                          className={"text-left flex-1 flex items-center gap-3 " + (cat === c ? "font-semibold" : "")}
                           onClick={() => { setCat(c); setFilterOn(false); scrollToCategory(c); setNavOpen(false); }}
                         >
-                          {c}
-                        </button>
+                          <span className="text-neutral-400 select-none">⋮⋮</span>
+                          <span>{c}</span>
+                        </div>
                         <div className="ml-3 flex items-center gap-2">
-                          <button
-                            className="text-xs px-2 py-1 border rounded-full text-neutral-600 hover:text-neutral-800 hover:border-neutral-400"
-                            onClick={(e) => { e.stopPropagation(); moveCategory(c, -1); }}
-                            title="Kategorie nach oben/links"
-                          >
-                            ▲
-                          </button>
-                          <button
-                            className="text-xs px-2 py-1 border rounded-full text-neutral-600 hover:text-neutral-800 hover:border-neutral-400"
-                            onClick={(e) => { e.stopPropagation(); moveCategory(c, 1); }}
-                            title="Kategorie nach unten/rechts"
-                          >
-                            ▼
-                          </button>
                           <button
                             className="text-xs px-2 py-1 border rounded-full text-neutral-600 hover:text-neutral-800 hover:border-neutral-400"
                             onClick={(e) => { e.stopPropagation(); renameCategory(c); }}
