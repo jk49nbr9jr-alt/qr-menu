@@ -1,21 +1,5 @@
 [
   {
-    "id": "hxvpiek",
-    "name": "Hausgemachte Limonade",
-    "desc": "Frische Zitrone, Minze und Sprudelwasser – ideal im Sommer.",
-    "price": 3.2,
-    "img": "https://images.unsplash.com/photo-1575596510825-f748919a2bf7?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=1287",
-    "category": "Getränke (Kalt)"
-  },
-  {
-    "id": "1wm0u8j",
-    "name": "Iced Latte",
-    "desc": "Erfrischender Eiskaffee mit Milch, Vanille und Eiswürfeln.",
-    "price": 3.8,
-    "img": "https://images.unsplash.com/photo-1461023058943-07fcbe16d735?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=2669",
-    "category": "Getränke (Kalt)"
-  },
-  {
     "id": "v63o4to",
     "name": "Cheezy",
     "desc": "Cheezy",
@@ -38,6 +22,22 @@
     "price": 7.5,
     "img": "https://images.unsplash.com/photo-1699728088614-7d1d4277414b?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=1287",
     "category": "Döner"
+  },
+  {
+    "id": "hxvpiek",
+    "name": "Hausgemachte Limonade",
+    "desc": "Frische Zitrone, Minze und Sprudelwasser – ideal im Sommer.",
+    "price": 3.2,
+    "img": "https://images.unsplash.com/photo-1575596510825-f748919a2bf7?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=1287",
+    "category": "Getränke (Kalt)"
+  },
+  {
+    "id": "1wm0u8j",
+    "name": "Iced Latte",
+    "desc": "Erfrischender Eiskaffee mit Milch, Vanille und Eiswürfeln.",
+    "price": 3.8,
+    "img": "https://images.unsplash.com/photo-1461023058943-07fcbe16d735?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=2669",
+    "category": "Getränke (Kalt)"
   },
   {
     "id": "e63bp93",
