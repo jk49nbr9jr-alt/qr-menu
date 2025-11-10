@@ -765,16 +765,6 @@ function AdminApp() {
     scheduleAutosave();
   }
 
-  function moveCategory(name: string, dir: -1 | 1) {
-    const idx = categories.indexOf(name);
-    if (idx < 0) return;
-    const j = idx + dir;
-    if (j < 0 || j >= categories.length) return; // außerhalb – nichts tun
-    const order = [...categories];
-    [order[idx], order[j]] = [order[j], order[idx]];
-    reorderMenuByCategories(order);
-    setCat(name);
-  }
 
   function moveCategoryByDnD(fromCat: string, toCat: string) {
     if (!fromCat || !toCat || fromCat === toCat) return;
