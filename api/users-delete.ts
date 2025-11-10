@@ -133,36 +133,56 @@ export default async function handler(req: Request): Promise<Response> {
   // Helper to normalize comparisons (trim + lowercase)
   const norm = (s: string) => s.trim().toLowerCase();
 
-  // Remove from allowed (case/whitespace insensitive)
-  const beforeAllowed = users.allowed.slice();
-  users.allowed = (users.allowed || []).filter((u) => norm(u) !== norm(username));
+  // Snapshot before state for logs/debugging
+  const beforeAllowed = (users.allowed || []).slice();
+  const beforePwdKeys = Object.keys(users.passwords || {});
+
+  // Rebuild allowed list: remove any entries matching the username (case/whitespace insensitive)
+  // and also collapse duplicates by normalized key (preserving the first occurrence's casing)
+  const seen = new Set<string>();
+  const newAllowed: string[] = [];
+  for (const u of beforeAllowed) {
+    const key = norm(u);
+    if (key === norm(username)) continue; // drop matching user
+    if (seen.has(key)) continue; // drop duplicates
+    seen.add(key);
+    newAllowed.push(u.trim());
+  }
+  users.allowed = newAllowed;
 
   // Remove password by exact key or any normalized match
   let pwdChanged = false;
-  if (users.passwords) {
-    // Exact key
-    if (username in users.passwords) {
-      delete users.passwords[username];
+  if (!users.passwords) users.passwords = {};
+  // Exact key first
+  if (username in users.passwords) {
+    delete users.passwords[username];
+    pwdChanged = true;
+  }
+  // Any other key that normalizes to the same value
+  for (const k of Object.keys(users.passwords)) {
+    if (norm(k) === norm(username)) {
+      delete users.passwords[k];
       pwdChanged = true;
     }
-    // Any other key that normalizes to the same value
-    for (const k of Object.keys(users.passwords)) {
-      if (norm(k) === norm(username)) {
-        delete users.passwords[k];
-        pwdChanged = true;
-      }
-    }
-  } else {
-    users.passwords = {};
   }
 
   const allowedChanged = beforeAllowed.length !== users.allowed.length;
 
+  // Emit diagnostic log to Vercel runtime logs
+  console.log('[users-delete] tenant=%s username=%s removedAllowed=%d pwdChanged=%s',
+    tenant,
+    username,
+    Math.max(0, beforeAllowed.length - users.allowed.length),
+    String(pwdChanged)
+  );
+  console.log('[users-delete] beforeAllowed=%o afterAllowed=%o', beforeAllowed, users.allowed);
+  console.log('[users-delete] beforePwdKeys=%o afterPwdKeys=%o', beforePwdKeys, Object.keys(users.passwords));
+
   // If nothing changed, still return ok (idempotent delete)
   if (!allowedChanged && !pwdChanged) {
-    return ok({ tenant, username, changed: false });
+    return ok({ tenant, username, changed: false, reason: 'not-found', beforeAllowed, afterAllowed: users.allowed, pwdKeysBefore: beforePwdKeys, pwdKeysAfter: Object.keys(users.passwords) });
   }
 
   await ghPutJson(usersPath, users, sha, `delete user ${username} (tenant: ${tenant})`);
-  return ok({ tenant, username, changed: true });
+  return ok({ tenant, username, changed: true, removedAllowed: Math.max(0, beforeAllowed.length - users.allowed.length), pwdChanged });
 }
