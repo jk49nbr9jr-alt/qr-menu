@@ -40,10 +40,33 @@ function sanitizeTenant(input?: string) {
   return clean || "speisekarte";
 }
 
-function requireSecret(req: Request) {
-  const hdr = req.headers.get("x-admin-secret") || "";
+function requireSecret(req: any) {
   const expected = process.env.VITE_ADMIN_SECRET || process.env.ADMIN_SECRET || "";
-  return !!expected && hdr === expected;
+  if (!expected) return false;
+
+  const h = req?.headers;
+  if (!h) return false;
+
+  // WHATWG Request?
+  if (typeof h.get === "function") {
+    const v =
+      h.get("x-admin-secret") ||
+      h.get("X-Admin-Secret") ||
+      "";
+    return v === expected;
+  }
+
+  // Node IncomingHttpHeaders (plain object)
+  if (typeof h === "object") {
+    // Header-Namen case-insensitive behandeln
+    const key = Object.keys(h).find(k => k.toLowerCase() === "x-admin-secret");
+    if (!key) return false;
+    const vRaw: any = (h as any)[key];
+    const v = Array.isArray(vRaw) ? vRaw[0] : String(vRaw ?? "");
+    return v === expected;
+  }
+
+  return false;
 }
 
 const GH_OWNER = process.env.GITHUB_OWNER || "";
