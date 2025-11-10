@@ -1,7 +1,7 @@
 // Vercel Edge-compatible registration endpoint (no fs/path)
 // Persists to GitHub repo: data/<tenant>/{users.json,pending.json}
 
-export const config = { runtime: 'edge' } as const;
+export const config = { runtime: 'nodejs' } as const;
 
 function getTenant(bodyOrQuery: any) {
   const t = (bodyOrQuery?.tenant || '').toString().trim();
@@ -20,11 +20,10 @@ function ghUrl(p: string) {
 }
 
 function b64encode(str: string) {
-  // Edge runtime does not have Buffer – use Web APIs
-  return btoa(unescape(encodeURIComponent(str)));
+  return Buffer.from(str, 'utf8').toString('base64');
 }
 function b64decode(b64: string) {
-  try { return decodeURIComponent(escape(atob(b64))); } catch { return ''; }
+  try { return Buffer.from(b64, 'base64').toString('utf8'); } catch { return ''; }
 }
 
 async function ghReadJson<T>(repoPath: string, fallback: T): Promise<{ data: T; sha: string | null }>{
@@ -65,7 +64,7 @@ export default async function handler(req: Request): Promise<Response> {
 
   // Basic guard: require GitHub credentials
   if (!GH_TOKEN || !GH_OWNER || !GH_REPO) {
-    return new Response(JSON.stringify({ ok:false, error: 'server-misconfigured' }), { status: 500 });
+    return new Response(JSON.stringify({ ok:false, error: 'server-misconfigured' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
   }
 
   const body = await req.json().catch(() => ({}));
@@ -73,7 +72,7 @@ export default async function handler(req: Request): Promise<Response> {
   const u = (body.username || '').toString().trim();
   const p = (body.password || '').toString();
   if (!u || !p || u.toLowerCase() === 'admin') {
-    return new Response(JSON.stringify({ ok:false, error:'invalid' }), { status: 400 });
+    return new Response(JSON.stringify({ ok:false, error:'invalid' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
   }
 
   const usersPath = `data/${tenant}/users.json`;

@@ -1,40 +1,75 @@
-import fs from 'fs/promises';
-import path from 'path';
+export const config = { runtime: 'nodejs' } as const;
 
-function getTenant(bodyOrQuery: any) {
-  const t = (bodyOrQuery?.tenant || '').toString().trim();
-  return t || 'speisekarte';
+/**
+ * Returns allowed users and pending users for a tenant from GitHub storage.
+ * Uses GitHub Contents API instead of local filesystem.
+ */
+
+type UsersJson = { allowed: string[]; passwords: Record<string, string> };
+type PendingJson = Record<string, string>;
+type GitHubFile = { content: string; sha: string; encoding: string };
+
+function sanitizeTenant(input?: string) {
+  const raw = (input || '').toString().trim().toLowerCase();
+  const clean = raw.replace(/[^a-z0-9._-]/g, '');
+  return clean || 'speisekarte';
 }
-function dirFor(tenant: string) {
-  return path.join(process.cwd(), 'data', tenant);
+
+const GH_OWNER = process.env.GITHUB_OWNER || '';
+const GH_REPO = process.env.GITHUB_REPO || '';
+const GH_TOKEN = process.env.GITHUB_TOKEN || '';
+
+async function gh<T = any>(url: string, init?: RequestInit): Promise<T> {
+  const r = await fetch(`https://api.github.com${url}`, {
+    ...init,
+    headers: {
+      Accept: 'application/vnd.github+json',
+      Authorization: `Bearer ${GH_TOKEN}`,
+      'User-Agent': 'qr-menu-api',
+      ...(init?.headers || {}),
+    },
+    cache: 'no-store',
+  });
+  if (!r.ok) {
+    const text = await r.text().catch(() => '');
+    throw new Error(`GitHub ${r.status}: ${text || r.statusText}`);
+  }
+  return (await r.json()) as T;
 }
-async function ensureFiles(tenant: string) {
-  const dir = dirFor(tenant);
-  await fs.mkdir(dir, { recursive: true });
-  const users = path.join(dir, 'users.json');
-  const pending = path.join(dir, 'pending.json');
-  try { await fs.access(users); } catch { await fs.writeFile(users, JSON.stringify({ allowed: ["admin"], passwords: {} }, null, 2)); }
-  try { await fs.access(pending); } catch { await fs.writeFile(pending, JSON.stringify({}, null, 2)); }
-  return { users, pending };
+
+async function ghGetFile(path: string): Promise<GitHubFile> {
+  return gh(`/repos/${GH_OWNER}/${GH_REPO}/contents/${encodeURIComponent(path)}`);
 }
-async function readJSON<T>(file: string, fallback: T): Promise<T> {
-  try { return JSON.parse(await fs.readFile(file, 'utf8')) as T; } catch { return fallback; }
+
+async function readJsonFile<T>(path: string, fallback: T): Promise<T> {
+  try {
+    const f = await ghGetFile(path);
+    const buf = Buffer.from(f.content, (f.encoding as BufferEncoding) || 'base64');
+    return JSON.parse(buf.toString('utf8')) as T;
+  } catch {
+    return fallback;
+  }
 }
-async function writeJSON(file: string, data: any) {
-  await fs.writeFile(file, JSON.stringify(data, null, 2));
-}
-function requireSecret(req: Request) {
-  const hdr = req.headers.get('x-admin-secret') || '';
-  const expected = process.env.VITE_ADMIN_SECRET || process.env.ADMIN_SECRET || '';
-  if (!expected || hdr !== expected) return false;
-  return true;
-}
-export default async function handler(req: Request) {
+
+export default async function handler(req: Request): Promise<Response> {
   const { searchParams } = new URL(req.url);
-  const tenant = getTenant({ tenant: searchParams.get('tenant') });
-  const { users, pending } = await ensureFiles(tenant);
+  const tenant = sanitizeTenant(searchParams.get('tenant') || undefined);
 
-  const u = await readJSON<{allowed:string[], passwords:Record<string,string>}>(users, {allowed:["admin"], passwords:{}});
-  const p = await readJSON<Record<string,string>>(pending, {});
-  return new Response(JSON.stringify({ ok:true, allowed: u.allowed, pending: p }), { status: 200, headers: { 'Content-Type': 'application/json' }});
+  if (!GH_OWNER || !GH_REPO || !GH_TOKEN) {
+    return new Response(JSON.stringify({ ok: false, error: 'missing-github-config' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  const usersPath = `data/${tenant}/users.json`;
+  const pendingPath = `data/${tenant}/pending.json`;
+
+  const users = await readJsonFile<UsersJson>(usersPath, { allowed: ['admin'], passwords: {} });
+  const pending = await readJsonFile<PendingJson>(pendingPath, {});
+
+  return new Response(
+    JSON.stringify({ ok: true, allowed: users.allowed, pending }),
+    { status: 200, headers: { 'Content-Type': 'application/json' } }
+  );
 }
