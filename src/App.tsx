@@ -329,13 +329,20 @@ function PublicApp() {
   return (
     <div className="min-h-screen bg-neutral-50 text-neutral-900">
       <header className="bg-white border-b">
-        <div className="max-w-5xl mx-auto flex justify-between items-center p-4">
-          <div className="flex items-center gap-2">
-            <img src={LOGO_SRC} alt={BRAND_TITLE} className="h-7 sm:h-8 w-auto" />
+        <div className="max-w-5xl mx-auto relative p-3 sm:p-4">
+          {/* Centered logo */}
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <img src={LOGO_SRC} alt={BRAND_TITLE} className="h-7 sm:h-8 w-auto pointer-events-auto" />
             <span className="sr-only">{BRAND_TITLE}</span>
           </div>
-          <div className="flex items-center gap-2">
-            <Button onClick={() => setLoginOpen(true)}>Anmelden</Button>
+          {/* Right side actions */}
+          <div className="flex items-center justify-end">
+            <Button
+              className="rounded-full border-neutral-300 px-4 py-2 text-sm"
+              onClick={() => setLoginOpen(true)}
+            >
+              Anmelden
+            </Button>
           </div>
         </div>
       </header>
@@ -1003,12 +1010,18 @@ function AdminApp() {
 
 /* ---------- sehr einfacher Router: /admin -> AdminApp, sonst Public ---------- */
 export default function App() {
-  // Hash-Routing: /#/admin statt /admin
-  const path =
-    typeof window !== "undefined"
-      ? (window.location.hash?.slice(1) || "/")
-      : "/";
+  // Simple reactive hash router (#/admin etc.)
+  const [route, setRoute] = React.useState<string>(() => {
+    if (typeof window === "undefined") return "/";
+    return window.location.hash?.slice(1) || "/";
+  });
 
-  if (path.startsWith("/admin")) return <AdminApp />;
+  React.useEffect(() => {
+    const onHash = () => setRoute(window.location.hash?.slice(1) || "/");
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+
+  if (route.startsWith("/admin")) return <AdminApp />;
   return <PublicApp />;
 }
