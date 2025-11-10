@@ -64,6 +64,21 @@ if (import.meta.env?.DEV && !ADMIN_SECRET) {
   console.warn("[qr-menu] VITE_ADMIN_SECRET ist leer – Admin-APIs (Passwort/Approve/Delete) werden 400 liefern.");
 }
 
+function getAdminSecret(): string {
+  // 1) Build-time env injected by Vite (Vercel)
+  const env = (import.meta as any)?.env?.VITE_ADMIN_SECRET;
+  if (env) return String(env);
+  // 2) Fallback: stored locally after a one-time prompt
+  if (typeof window !== "undefined") {
+    const saved = localStorage.getItem("qrmenu.admin.secret");
+    if (saved) return saved;
+    const ask = prompt("Admin-Secret eingeben:") || "";
+    if (ask) localStorage.setItem("qrmenu.admin.secret", ask);
+    return ask;
+  }
+  return "";
+}
+
 type UsersResponse = {
   ok: boolean;
   allowed: string[];
@@ -73,7 +88,10 @@ type UsersResponse = {
 
 async function apiUsersGet(tenant: string, includePasswords = false): Promise<UsersResponse> {
   const headers: Record<string, string> = {};
-  if (includePasswords && ADMIN_SECRET) headers["x-admin-secret"] = ADMIN_SECRET;
+  if (includePasswords) {
+    const secret = getAdminSecret();
+    if (secret) headers["x-admin-secret"] = secret;
+  }
   const r = await fetch(`/api/users?tenant=${encodeURIComponent(tenant)}`, { headers, cache: "no-store" });
   if (!r.ok) return { ok: false, allowed: ["admin"], pending: {} };
   return r.json();
@@ -94,36 +112,40 @@ async function serverRegister(username: string, password: string) {
 }
 async function serverApprove(username: string) {
   const tenant = getTenantKey();
+  const secret = getAdminSecret();
   const r = await fetch("/api/users-approve", {
     method: "POST",
-    headers: { "Content-Type": "application/json", "x-admin-secret": ADMIN_SECRET },
+    headers: { "Content-Type": "application/json", "x-admin-secret": secret },
     body: JSON.stringify({ tenant, username }),
   });
   if (!r.ok) throw new Error(await r.text());
 }
 async function serverReject(username: string) {
   const tenant = getTenantKey();
+  const secret = getAdminSecret();
   const r = await fetch("/api/users-reject", {
     method: "POST",
-    headers: { "Content-Type": "application/json", "x-admin-secret": ADMIN_SECRET },
+    headers: { "Content-Type": "application/json", "x-admin-secret": secret },
     body: JSON.stringify({ tenant, username }),
   });
   if (!r.ok) throw new Error(await r.text());
 }
 async function serverSetPassword(username: string, password: string) {
   const tenant = getTenantKey();
+  const secret = getAdminSecret();
   const r = await fetch(`/api/users-set-password?tenant=${encodeURIComponent(tenant)}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "x-admin-secret": ADMIN_SECRET },
+    headers: { "Content-Type": "application/json", "x-admin-secret": secret },
     body: JSON.stringify({ tenant, username, password }),
   });
   if (!r.ok) throw new Error(await r.text());
 }
 async function serverDeleteUser(username: string) {
   const tenant = getTenantKey();
+  const secret = getAdminSecret();
   const r = await fetch("/api/users-delete", {
     method: "POST",
-    headers: { "Content-Type": "application/json", "x-admin-secret": ADMIN_SECRET },
+    headers: { "Content-Type": "application/json", "x-admin-secret": secret },
     body: JSON.stringify({ tenant, username }),
   });
   if (!r.ok) throw new Error(await r.text());
@@ -1372,10 +1394,16 @@ function AdminApp() {
                       <Button
                         className="rounded-full px-3 py-1 text-sm"
                         onClick={async () => {
-                          await serverApprove(u);
-                          const j = await apiUsersGet(getTenantKey());
-                          setUsersList(j.allowed || []);
-                          setPendingUsers(j.pending || {});
+                          try {
+                            await serverApprove(u);
+                            const j = await apiUsersGet(getTenantKey());
+                            setUsersList(j.allowed || []);
+                            setPendingUsers(j.pending || {});
+                            alert(`"${u}" freigegeben.`);
+                          } catch (e: any) {
+                            console.error(e);
+                            alert("Freigeben fehlgeschlagen:\n" + (e?.message || e));
+                          }
                         }}
                         pill
                       >
@@ -1384,9 +1412,15 @@ function AdminApp() {
                       <Button
                         className="rounded-full px-3 py-1 text-sm text-red-600 border-red-300 hover:bg-red-50"
                         onClick={async () => {
-                          await serverReject(u);
-                          const j = await apiUsersGet(getTenantKey());
-                          setPendingUsers(j.pending || {});
+                          try {
+                            await serverReject(u);
+                            const j = await apiUsersGet(getTenantKey());
+                            setPendingUsers(j.pending || {});
+                            alert(`"${u}" abgelehnt.`);
+                          } catch (e: any) {
+                            console.error(e);
+                            alert("Ablehnen fehlgeschlagen:\n" + (e?.message || e));
+                          }
                         }}
                         pill
                       >
