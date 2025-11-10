@@ -90,15 +90,35 @@ async function gh<T>(url: string, init?: RequestInit): Promise<T> {
   return (await r.json()) as T;
 }
 
+function encPath(p: string) {
+  return p.split('/').map(encodeURIComponent).join('/');
+}
+
 async function ghGetFile(path: string): Promise<GitHubFile & { path: string }> {
-  return gh<GitHubFile & { path: string }>(`/repos/${GH_OWNER}/${GH_REPO}/contents/${encodeURIComponent(path)}`);
+  return gh<GitHubFile & { path: string }>(`/repos/${GH_OWNER}/${GH_REPO}/contents/${encPath(path)}`);
 }
 async function ghPutFile(path: string, contentObj: unknown, sha: string | null, message: string) {
-  const content = Buffer.from(JSON.stringify(contentObj, null, 2), "utf8").toString("base64");
-  return gh(`/repos/${GH_OWNER}/${GH_REPO}/contents/${encodeURIComponent(path)}`, {
-    method: "PUT",
-    body: JSON.stringify({ message, content, sha: sha || undefined }),
-  });
+  try {
+    // If no SHA provided, try to fetch it (update vs create safety)
+    let effectiveSha = sha;
+    if (!effectiveSha) {
+      try {
+        const current = await ghGetFile(path);
+        effectiveSha = current.sha || null;
+      } catch {
+        // file does not exist -> create new (no sha)
+        effectiveSha = null;
+      }
+    }
+    const content = Buffer.from(JSON.stringify(contentObj, null, 2), "utf8").toString("base64");
+    return gh(`/repos/${GH_OWNER}/${GH_REPO}/contents/${encPath(path)}`, {
+      method: "PUT",
+      body: JSON.stringify({ message, content, sha: effectiveSha || undefined }),
+    });
+  } catch (e) {
+    console.error(`[users-approve] ghPutFile failed for ${path}`, e);
+    throw e;
+  }
 }
 
 async function readJsonFromRepo<T>(path: string, fallback: T): Promise<{ data: T; sha: string | null }> {
@@ -107,7 +127,8 @@ async function readJsonFromRepo<T>(path: string, fallback: T): Promise<{ data: T
     const buf = Buffer.from(f.content, (f.encoding as BufferEncoding) || "base64");
     const parsed = JSON.parse(buf.toString("utf8")) as T;
     return { data: parsed, sha: f.sha };
-  } catch {
+  } catch (e) {
+    console.warn('[users-approve] readJsonFromRepo fallback for', path, 'err=', e && (e as any).message);
     return { data: fallback, sha: null };
   }
 }
@@ -137,6 +158,30 @@ function getURL(req: any): URL {
     if (req?.url) return new URL(req.url, `https://${req.headers?.host || "localhost"}`);
   } catch {}
   return new URL("https://localhost/");
+}
+
+async function approveUserFlow(tenant: string, username: string, usersPath: string, pendingPath: string, usersShaHint: string | null = null, pendingShaHint: string | null = null) {
+  const { data: users, sha: usersSha } = await readJsonFromRepo<UsersJson>(usersPath, {
+    allowed: ["admin"],
+    passwords: {},
+  });
+  const { data: pending, sha: pendingSha } = await readJsonFromRepo<PendingJson>(pendingPath, {});
+
+  const pwd = pending[username];
+  if (!pwd) {
+    const e: any = new Error("no-pending");
+    e.code = "no-pending";
+    throw e;
+  }
+
+  if (!users.allowed.includes(username)) users.allowed.push(username);
+  users.passwords[username] = pwd;
+  delete pending[username];
+
+  await ghPutFile(usersPath, users, usersShaHint ?? usersSha, `approve user ${username} (tenant: ${tenant})`);
+  await ghPutFile(pendingPath, pending, pendingShaHint ?? pendingSha, `remove user from pending ${username} (tenant: ${tenant})`);
+
+  return { tenant, username };
 }
 
 export default async function handler(req: any) {
@@ -175,7 +220,23 @@ export default async function handler(req: any) {
       });
     }
 
-    return ok({ tenant, paths: { usersPath, pendingPath }, now: Date.now() });
+    if (mode === "approve") {
+      if (!requireSecret(req)) {
+        return err(401, "unauthorized", { reason: "missing-or-invalid-x-admin-secret" });
+      }
+      const username = (url.searchParams.get("username") || "").trim();
+      if (!username) return err(400, "username-required");
+      try {
+        const usersPath2 = `data/${tenant}/users.json`;
+        const pendingPath2 = `data/${tenant}/pending.json`;
+        const result = await approveUserFlow(tenant, username, usersPath2, pendingPath2);
+        return ok(result);
+      } catch (e: any) {
+        return err(400, "approve-failed", { message: String(e?.message || e), stack: e?.stack || null });
+      }
+    }
+
+    return ok({ mode, tenant, paths: { usersPath, pendingPath }, now: Date.now() });
   }
 
   if (req.method !== "POST") return err(405, "method-not-allowed");
@@ -201,7 +262,7 @@ export default async function handler(req: any) {
   const usersPath = `data/${tenant}/users.json`;
   const pendingPath = `data/${tenant}/pending.json`;
 
-  try {
+  if (url.searchParams.get("dryrun") === "1") {
     // Load files (or defaults)
     const { data: users, sha: usersSha } = await readJsonFromRepo<UsersJson>(usersPath, {
       allowed: ["admin"],
@@ -210,47 +271,23 @@ export default async function handler(req: any) {
     const { data: pending, sha: pendingSha } = await readJsonFromRepo<PendingJson>(pendingPath, {});
 
     const pwd = pending[username];
-    if (!pwd) return err(400, "no-pending");
-
-    if (url.searchParams.get("dryrun") === "1") {
-      return ok({
-        dryrun: true,
-        tenant,
-        username,
-        plan: {
-          willAddToAllowed: !users.allowed.includes(username),
-          willSetPassword: true,
-          willRemoveFromPending: !!pwd,
-        },
-        snapshot: { users, pending },
-      });
-    }
-
-    // Update structures
-    if (!users.allowed.includes(username)) users.allowed.push(username);
-    users.passwords[username] = pwd;
-    delete pending[username];
-
-    // Save both files back to repo (two commits)
-    try {
-      await ghPutFile(usersPath, users, usersSha, `approve user ${username} (tenant: ${tenant})`);
-    } catch (e: any) {
-      return err(500, "github-write-users-failed", { message: String(e?.message || e) });
-    }
-    try {
-      await ghPutFile(pendingPath, pending, pendingSha, `remove user from pending ${username} (tenant: ${tenant})`);
-    } catch (e: any) {
-      // If pending write fails, surface explicit error (admin can re-run approve)
-      return err(500, "github-write-pending-failed", { message: String(e?.message || e) });
-    }
-
-    return ok({ tenant, username });
-  } catch (e: any) {
-    return err(500, "approve-failed", {
-      message: String(e?.message || e),
-      stack: e?.stack || null,
-      url: url.toString(),
-      context: { usersPath, pendingPath, tenant, username, method: req.method },
+    return ok({
+      dryrun: true,
+      tenant,
+      username,
+      plan: {
+        willAddToAllowed: !users.allowed.includes(username),
+        willSetPassword: true,
+        willRemoveFromPending: !!pwd,
+      },
+      snapshot: { users, pending },
     });
+  }
+
+  try {
+    const result = await approveUserFlow(tenant, username, usersPath, pendingPath);
+    return ok(result);
+  } catch (e: any) {
+    return err(500, "approve-failed", { message: String(e?.message || e), stack: e?.stack || null });
   }
 }
