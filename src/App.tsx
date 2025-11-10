@@ -765,6 +765,11 @@ function AdminApp() {
   });
   const currentUser = (typeof window !== "undefined" ? sessionStorage.getItem(ADMIN_USER_KEY) : null) || username || "";
   const isSuperAdmin = currentUser === "admin";
+  // --- Password Modal State ---
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+  const [newPw, setNewPw] = useState("");
+  const [confirmPw, setConfirmPw] = useState("");
+  const [pwError, setPwError] = useState<string | null>(null);
 
   // --- Toolbar/Category Scroll State ---
   const [navOpen, setNavOpen] = useState(false);
@@ -996,27 +1001,8 @@ function AdminApp() {
   }
 
   // Passwort ändern (Server)
-  async function changePassword() {
-    const currentUser = sessionStorage.getItem(ADMIN_USER_KEY) || username;
-    if (!currentUser) {
-      alert("Kein Benutzer angemeldet.");
-      return;
-    }
-    const pw1 = prompt("Neues Passwort eingeben:");
-    if (!pw1) return;
-    const pw2 = prompt("Neues Passwort wiederholen:");
-    if (pw1 !== pw2) {
-      alert("Passwörter stimmen nicht überein.");
-      return;
-    }
-    try {
-      await serverSetPassword(currentUser, pw1);
-      alert("Passwort erfolgreich geändert.");
-    } catch (err: any) {
-      const msg = String(err?.message || err || "");
-      alert("Passwort konnte nicht gesetzt werden.\n" + msg);
-      console.error("[set-password] failed:", err);
-    }
+  function changePassword() {
+    setPasswordModalOpen(true);
   }
 
   // User management helpers (Server)
@@ -1445,6 +1431,61 @@ function AdminApp() {
                   </div>
                 ))
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Passwort ändern Modal */}
+      {isSuperAdmin && passwordModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center">
+          <div className="w-full max-w-sm rounded-xl bg-white shadow-xl p-5">
+            <div className="font-semibold text-lg mb-3">Passwort ändern</div>
+            <label className="text-sm block mb-2">
+              Neues Passwort
+              <Input
+                type="password"
+                className="mt-1"
+                value={newPw}
+                onChange={(e) => setNewPw(e.target.value)}
+                placeholder="••••••••"
+              />
+            </label>
+            <label className="text-sm block mb-2">
+              Passwort bestätigen
+              <Input
+                type="password"
+                className="mt-1"
+                value={confirmPw}
+                onChange={(e) => setConfirmPw(e.target.value)}
+                placeholder="••••••••"
+              />
+            </label>
+            {pwError && <div className="text-xs text-red-600 mb-2">{pwError}</div>}
+            <div className="flex items-center justify-end gap-2 pt-3">
+              <Button onClick={() => setPasswordModalOpen(false)}>Abbrechen</Button>
+              <PrimaryBtn
+                disabled={!newPw || !confirmPw}
+                onClick={async () => {
+                  if (newPw !== confirmPw) {
+                    setPwError("Passwörter stimmen nicht überein.");
+                    return;
+                  }
+                  try {
+                    const currentUser = sessionStorage.getItem(ADMIN_USER_KEY) || username;
+                    await serverSetPassword(currentUser, newPw);
+                    alert("Passwort erfolgreich geändert.");
+                    setPasswordModalOpen(false);
+                    setNewPw("");
+                    setConfirmPw("");
+                    setPwError(null);
+                  } catch (err: any) {
+                    setPwError("Fehler: " + (err?.message || "unbekannt"));
+                  }
+                }}
+              >
+                Speichern
+              </PrimaryBtn>
             </div>
           </div>
         </div>
