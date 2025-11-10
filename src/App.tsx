@@ -1014,38 +1014,6 @@ function AdminApp() {
     setPasswordModalOpen(true);
   }
 
-  // User management helpers (Server)
-  async function resetPasswordFor(targetUser: string) {
-    const pw1 = prompt(`Neues Passwort für "${targetUser}" eingeben:`);
-    if (!pw1) return;
-    const pw2 = prompt("Neues Passwort wiederholen:");
-    if (pw1 !== pw2) {
-      alert("Passwörter stimmen nicht überein.");
-      return;
-    }
-    try {
-      await serverSetPassword(targetUser, pw1);
-      showNotify(`"${targetUser}" Passwort geändert.`, "success");
-    } catch (err: any) {
-      showNotify(`Passwort konnte für "${targetUser}" nicht gesetzt werden.`, "error");
-      console.error("[reset-password] failed:", err);
-    }
-  }
-
-  async function deleteUser(targetUser: string) {
-    const currentUser = sessionStorage.getItem(ADMIN_USER_KEY) || username;
-    if (targetUser === "admin") { alert("Der Benutzer 'admin' kann nicht gelöscht werden."); return; }
-    if (targetUser === currentUser) { alert("Du kannst den aktuell angemeldeten Benutzer nicht löschen."); return; }
-    if (!confirm(`Benutzer "${targetUser}" wirklich löschen?`)) return;
-    try {
-      await serverDeleteUser(targetUser);
-      const j = await apiUsersGet(getTenantKey());
-      setUsersList(j.allowed || []);
-    } catch (err: any) {
-      showNotify(`Benutzer "${targetUser}" konnte nicht gelöscht werden.`, "error");
-      console.error("[users-delete] failed:", err);
-    }
-  }
 
   if (!authed) {
     return (
@@ -1469,6 +1437,29 @@ function AdminApp() {
                         Ablehnen
                       </Button>
                     </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Benutzer-Liste (nur Anzeige) */}
+      {isSuperAdmin && usersOpen && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center">
+          <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
+            <div className="p-4 border-b flex items-center justify-between">
+              <div className="font-semibold">Benutzer</div>
+              <Button onClick={() => setUsersOpen(false)}>Schließen</Button>
+            </div>
+            <div className="p-2 max-h-[70vh] overflow-auto">
+              {usersList.length === 0 ? (
+                <div className="p-3 text-sm text-neutral-500">Keine Benutzer gefunden.</div>
+              ) : (
+                usersList.map((u) => (
+                  <div key={u} className="flex items-center justify-between border-b px-3 py-2">
+                    <div className="font-medium">{u}</div>
                   </div>
                 ))
               )}
