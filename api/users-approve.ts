@@ -95,7 +95,9 @@ function encPath(p: string) {
 }
 
 async function ghGetFile(path: string): Promise<GitHubFile & { path: string }> {
-  return gh<GitHubFile & { path: string }>(`/repos/${GH_OWNER}/${GH_REPO}/contents/${encPath(path)}`);
+  return gh<GitHubFile & { path: string }>(
+    `/repos/${GH_OWNER}/${GH_REPO}/contents/${encPath(path)}?ref=${encodeURIComponent(process.env.GITHUB_BRANCH || "main")}`
+  );
 }
 async function ghPutFile(path: string, contentObj: unknown, sha: string | null, message: string) {
   try {
@@ -113,7 +115,12 @@ async function ghPutFile(path: string, contentObj: unknown, sha: string | null, 
     const content = Buffer.from(JSON.stringify(contentObj, null, 2), "utf8").toString("base64");
     return gh(`/repos/${GH_OWNER}/${GH_REPO}/contents/${encPath(path)}`, {
       method: "PUT",
-      body: JSON.stringify({ message, content, sha: effectiveSha || undefined }),
+      body: JSON.stringify({
+        message,
+        content,
+        sha: effectiveSha || undefined,
+        branch: process.env.GITHUB_BRANCH || "main",
+      }),
     });
   } catch (e) {
     console.error(`[users-approve] ghPutFile failed for ${path}`, e);
@@ -168,7 +175,11 @@ async function readBody(req: any): Promise<any> {
 
 function getURL(req: any): URL {
   try {
-    if (req?.url) return new URL(req.url, `https://${req.headers?.host || "localhost"}`);
+    const h = req?.headers || {};
+    const proto = (h["x-forwarded-proto"] as string) || (typeof h.get === "function" ? h.get("x-forwarded-proto") : "") || "https";
+    const host  = (h["x-forwarded-host"] as string)  || (typeof h.get === "function" ? h.get("x-forwarded-host")  : "") || h.host || "localhost";
+    const path  = typeof req?.url === "string" ? req.url : "/";
+    return new URL(`${proto}://${host}${path}`);
   } catch {}
   return new URL("https://localhost/");
 }
