@@ -3,9 +3,6 @@
  * Deletes a user from data/<tenant>/users.json in the GitHub repo.
  */
 
-export const config = {
-  runtime: "nodejs18.x",
-};
 
 type UsersFile = {
   allowed: string[];
