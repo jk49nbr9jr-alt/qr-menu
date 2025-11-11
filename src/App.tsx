@@ -297,8 +297,8 @@ const Editor: React.FC<EditorProps> = ({ open, item, menu, onClose, onSave }) =>
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center">
-      <div className="w-full max-w-lg rounded-xl bg-white shadow-xl">
-        <div className="p-4 border-b flex items-center justify-between">
+      <div className="w-full max-w-lg rounded-xl bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 shadow-xl border border-neutral-200 dark:border-neutral-800">
+        <div className="p-4 border-b border-neutral-200 dark:border-neutral-800 flex items-center justify-between">
           <div className="font-semibold">{item ? "Artikel bearbeiten" : "Neuer Artikel"}</div>
           <Button onClick={onClose}>Schließen</Button>
         </div>
@@ -343,7 +343,7 @@ const Editor: React.FC<EditorProps> = ({ open, item, menu, onClose, onSave }) =>
               <button
                 type="button"
                 onClick={() => setCatOpen(v => !v)}
-                className="mt-1 w-full inline-flex items-center justify-between rounded-full border border-neutral-300 bg-white px-4 py-2 text-sm hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-black/10"
+                className="mt-1 w-full inline-flex items-center justify-between rounded-full border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 dark:text-neutral-100 px-4 py-2 text-sm hover:bg-neutral-50 dark:hover:bg-neutral-700 focus:outline-none focus:ring-2 focus:ring-black/10 dark:focus:ring-white/10"
                 aria-haspopup="listbox"
                 aria-expanded={catOpen}
               >
@@ -359,12 +359,12 @@ const Editor: React.FC<EditorProps> = ({ open, item, menu, onClose, onSave }) =>
 
               {/* Popover */}
               {catOpen && (
-                <div className="absolute z-20 mt-2 w-full rounded-xl border bg-white shadow-lg max-h-60 overflow-auto">
+                <div className="absolute z-20 mt-2 w-full rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-lg max-h-60 overflow-auto">
                   {existingCats.map((catOpt) => (
                     <button
                       key={catOpt}
                       type="button"
-                      className={`w-full text-left px-4 py-2 hover:bg-neutral-50 ${draft.category === catOpt ? 'bg-neutral-100 font-medium' : ''}`}
+                      className={`w-full text-left px-4 py-2 hover:bg-neutral-50 dark:hover:bg-neutral-800 ${draft.category === catOpt ? 'bg-neutral-100 dark:bg-neutral-800 font-medium' : ''}`}
                       onClick={() => { setDraft({ ...draft, category: catOpt }); setCatOpen(false); }}
                     >
                       {catOpt}
@@ -373,7 +373,7 @@ const Editor: React.FC<EditorProps> = ({ open, item, menu, onClose, onSave }) =>
                   <div className="border-t" />
                   <button
                     type="button"
-                    className="w-full text-left px-4 py-2 text-amber-700 hover:bg-amber-50"
+                    className="w-full text-left px-4 py-2 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-neutral-800"
                     onClick={() => { setDraft({ ...draft, category: '' }); setCatOpen(false); }}
                   >
                     + Neue Kategorie hinzufügen
@@ -395,7 +395,7 @@ const Editor: React.FC<EditorProps> = ({ open, item, menu, onClose, onSave }) =>
           </label>
 
           {draft.img ? (
-            <img src={draft.img} alt="preview" className="mt-2 h-36 w-full object-cover rounded-md border" />
+            <img src={draft.img} alt="preview" className="mt-2 h-36 w-full object-cover rounded-md border border-neutral-200 dark:border-neutral-800" />
           ) : null}
 
           <div className="flex items-center justify-end gap-2 pt-2">
@@ -852,7 +852,7 @@ function PublicApp() {
                       </CardHeader>
                       <CardContent>
                         <p className="text-sm text-neutral-600 mb-2">{item.desc}</p>
-                        <div className="font-semibold">€ {item.price.toFixed(2)}</div>
+                        <div className="font-semibold">{item.price.toFixed(2)} €</div>
                       </CardContent>
                     </Card>
                   ))}
@@ -1492,7 +1492,7 @@ function AdminApp() {
                       <CardContent>
                         <p className="text-sm text-neutral-600 mb-2">{item.desc}</p>
                         <div className="flex items-center justify-between">
-                          <div className="font-semibold">€ {item.price.toFixed(2)}</div>
+                          <div className="font-semibold">{item.price.toFixed(2)} €</div>
                           <div className="flex items-center gap-2">
                             <Button onClick={() => { setEditTarget(item); setEditorOpen(true); }}>Bearbeiten</Button>
                             <Button onClick={() => deleteItem(item.id)}>Löschen</Button>
