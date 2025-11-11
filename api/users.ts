@@ -1,9 +1,9 @@
-// api/users.ts (Edge)
+// api/users.ts (Edge) - This endpoint never returns passwords and is used only for listing `allowed` and `pending`
 export const config = { runtime: "edge" };
 
 type UsersJson = {
   allowed?: string[];
-  passwords?: Record<string, string>;
+  // (Intentionally no passwords here – hashes are never returned by this endpoint)
 };
 type PendingJson = Record<string, string>;
 
@@ -56,7 +56,6 @@ export default async function handler(req: Request) {
 
     // --- users.json lesen (tolerant)
     let allowed: string[] = ["admin"];
-    let passwords: Record<string, string> = {};
 
     type GHFile = { content: string; sha: string; encoding: "base64" };
 
@@ -71,7 +70,6 @@ export default async function handler(req: Request) {
             allowed = parsed.length ? parsed : ["admin"];
           } else if (parsed && typeof parsed === "object") {
             allowed = Array.isArray(parsed.allowed) && parsed.allowed.length ? parsed.allowed : ["admin"];
-            passwords = parsed.passwords && typeof parsed.passwords === "object" ? parsed.passwords : {};
           }
         } catch {
           // fallback auf defaults
@@ -100,11 +98,9 @@ export default async function handler(req: Request) {
       return jsonRes(500, { ok: false, error: "github-read-pending", detail: pr.text });
     }
 
-    // Nur mit Secret Passwörter mitsenden
     const hasSecret = !!ADMIN_SECRET && req.headers.get("x-admin-secret") === ADMIN_SECRET;
-
     const body: any = { ok: true, tenant, allowed, pending };
-    if (hasSecret) body.passwords = passwords;
+    // No passwords are ever returned from this endpoint.
 
     if (mode === "selftest") {
       body.selftest = {

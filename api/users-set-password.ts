@@ -1,27 +1,43 @@
 // api/users-set-password.ts
-export const config = { runtime: "edge" }; // Vercel Edge
+// Sets (or resets) a user's password by updating data/<tenant>/users.json
+// Stores only a bcrypt *hash* under users.passwords[username].
+// Auth: requires x-admin-secret header to match ADMIN_SECRET/VITE_ADMIN_SECRET.
 
-type GHFile = { content: string; sha: string; encoding: "base64" };
+export const config = { runtime: "nodejs" } as const; // bcrypt requires Node runtime
 
-const GH_OWNER  = process.env.GITHUB_OWNER !;
-const GH_REPO   = process.env.GITHUB_REPO  !;
+import type { IncomingMessage, ServerResponse } from "http";
+import { Buffer } from "node:buffer";
+
+type GHFile = { content: string; sha: string; encoding: string };
+
+const GH_OWNER  = process.env.GITHUB_OWNER  || "";
+const GH_REPO   = process.env.GITHUB_REPO   || "";
 const GH_BRANCH = process.env.GITHUB_BRANCH || "main";
-const GH_TOKEN  = process.env.GITHUB_TOKEN !;
+const GH_TOKEN  = process.env.GITHUB_TOKEN  || "";
 
 const ADMIN_SECRET = process.env.ADMIN_SECRET || process.env.VITE_ADMIN_SECRET || "";
 
-// base64 helpers for Edge
-const enc = (s: string) => btoa(unescape(encodeURIComponent(s)));
-const dec = (b: string) => decodeURIComponent(escape(atob(b)));
-
-function jsonRes(code: number, body: unknown) {
-  return new Response(JSON.stringify(body, null, 2), {
-    status: code,
-    headers: { "content-type": "application/json" },
-  });
+function json(res: ServerResponse, code: number, body: unknown) {
+  res.statusCode = code;
+  res.setHeader("Content-Type", "application/json");
+  res.setHeader("Cache-Control", "no-store");
+  res.end(JSON.stringify(body, null, 2));
 }
 
-async function gh<T>(path: string, init?: RequestInit): Promise<T> {
+function sanitizeTenant(input?: string) {
+  const raw = (input || "").toString().trim().toLowerCase();
+  const clean = raw.replace(/[^a-z0-9._-]/g, "");
+  return clean || "speisekarte";
+}
+
+async function readJsonBody<T = any>(req: IncomingMessage): Promise<T> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of req) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  const raw = Buffer.concat(chunks).toString("utf8") || "{}";
+  try { return JSON.parse(raw) as T; } catch { return {} as T; }
+}
+
+async function gh<T = any>(path: string, init?: RequestInit): Promise<T> {
   const r = await fetch(`https://api.github.com${path}`, {
     ...init,
     headers: {
@@ -33,41 +49,39 @@ async function gh<T>(path: string, init?: RequestInit): Promise<T> {
     cache: "no-store",
   });
   if (!r.ok) {
-    const text = await r.text();
-    throw new Error(`[write] ${r.status} ${text}`);
+    const txt = await r.text().catch(() => "");
+    throw new Error(`[write] ${r.status} ${txt || r.statusText}`);
   }
   return r.json() as Promise<T>;
 }
 
-export default async function handler(req: Request) {
+export default async function handler(req: IncomingMessage, res: ServerResponse) {
   try {
-    // --- auth ---
-    const secret = req.headers.get("x-admin-secret") || "";
+    // ---- auth ----
+    const secret = (req.headers["x-admin-secret"] as string | undefined) || "";
     if (!ADMIN_SECRET || secret !== ADMIN_SECRET) {
-      return jsonRes(401, { ok: false, error: "unauthorized" });
+      return json(res, 401, { ok: false, error: "unauthorized" });
     }
 
-    // --- input ---
-    const url = new URL(req.url);
-    const tenantQ = url.searchParams.get("tenant") || "";
-    let username = "", password = "", tenant = tenantQ;
-    try {
-      const body = await req.json();
-      username = (body?.username || "").trim();
-      password = (body?.password || "").toString();
-      tenant = tenant || (body?.tenant || "").trim();
-    } catch { /* no body is ok for GET self-tests */ }
+    if (req.method !== "POST") {
+      res.setHeader("Allow", "POST");
+      return json(res, 405, { ok: false, error: "POST only" });
+    }
 
-    if (!tenant) return jsonRes(400, { ok: false, error: "tenant missing" });
-    if (req.method !== "POST") return jsonRes(405, { ok: false, error: "POST only" });
-    if (!username || !password) return jsonRes(400, { ok: false, error: "invalid input" });
+    // ---- input ----
+    const body = await readJsonBody<{ tenant?: string; username?: string; password?: string }>(req);
+    const tenant   = sanitizeTenant(body.tenant);
+    const username = (body.username || "").toString().trim();
+    const password = (body.password || "").toString();
 
-    // --- paths ---
+    if (!tenant)   return json(res, 400, { ok: false, error: "tenant missing" });
+    if (!username || !password) return json(res, 400, { ok: false, error: "invalid input" });
+
+    // ---- read existing users file ----
     const path = `/repos/${GH_OWNER}/${GH_REPO}/contents/data/${tenant}/users.json`;
 
-    // --- read existing file (may not exist on first run) ---
     let sha = "";
-    let users: { allowed?: string[]; pending?: Record<string,string>; passwords?: Record<string,string> } = {
+    let users: { allowed?: string[]; pending?: Record<string, string>; passwords?: Record<string, string> } = {
       allowed: ["admin"],
       pending: {},
       passwords: {},
@@ -75,23 +89,29 @@ export default async function handler(req: Request) {
 
     try {
       const f = await gh<GHFile>(`${path}?ref=${encodeURIComponent(GH_BRANCH)}`);
-      const json = dec(f.content);
+      const txt = Buffer.from(f.content, (f.encoding as BufferEncoding) || "base64").toString("utf8");
       sha = f.sha;
-      try { users = JSON.parse(json) || users; } catch {}
-      users.allowed ||= ["admin"];
-      users.pending ||= {};
-      users.passwords ||= {};
+      try { users = JSON.parse(txt) || users; } catch {}
+      users.allowed ||= ["admin"]; users.pending ||= {}; users.passwords ||= {};
     } catch {
-      // file not found -> create new
+      // not found -> new file will be created
     }
 
-    // --- update password map ---
-    users.passwords![username] = password;
+    // ---- hash password (bcrypt) ----
+    const looksLikeBcrypt = /^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$/.test(password);
+    let passwordHash = password;
+    if (!looksLikeBcrypt) {
+      const { hash } = await import("bcryptjs");
+      passwordHash = await hash(password, 10);
+    }
 
-    // --- write back (base64!) with sha if present ---
-    const content = enc(JSON.stringify(users, null, 2) + "\n");
+    // ---- update password map ----
+    users.passwords![username] = passwordHash;
+
+    // ---- write back (base64) ----
+    const content = Buffer.from(JSON.stringify(users, null, 2) + "\n", "utf8").toString("base64");
     const payload: any = {
-      message: `chore(${tenant}): set password for ${username}`,
+      message: `chore(${tenant}): set password (hashed) for ${username}`,
       content,
       branch: GH_BRANCH,
     };
@@ -99,8 +119,9 @@ export default async function handler(req: Request) {
 
     await gh(path, { method: "PUT", body: JSON.stringify(payload) });
 
-    return jsonRes(200, { ok: true });
+    // Do not return the hash
+    return json(res, 200, { ok: true, username, tenant });
   } catch (err: any) {
-    return jsonRes(500, { ok: false, error: String(err?.message || err) });
+    return json(res, 500, { ok: false, error: String(err?.message || err) });
   }
 }

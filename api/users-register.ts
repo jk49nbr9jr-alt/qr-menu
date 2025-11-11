@@ -112,6 +112,10 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     let username = (body.username || '').toString().trim().toLowerCase(); // <— FIX: normalisieren
     const password = (body.password || '').toString();
 
+    // Hash password before writing to GitHub (no plaintext in repo)
+    const { hash } = await import('bcryptjs');
+    const passwordHash = await hash(password, 10);
+
     if (!tenant) return json(res, 400, { ok: false, error: 'tenant-missing' });
     if (!username || !password) return json(res, 400, { ok: false, error: 'invalid' });
     if (username === 'admin') return json(res, 400, { ok: false, error: 'invalid' });
@@ -141,7 +145,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       return json(res, 409, { ok: false, error: 'pending' }); // <— FIX: 409
     }
 
-    const nextPending: PendingJson = { ...pendingData, [username]: password };
+    const nextPending: PendingJson = { ...pendingData, [username]: passwordHash };
     await ghWriteJson(
       pendingPath,
       nextPending,
@@ -154,6 +158,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       await ghWriteJson(usersPath, usersData, `chore(api): init users.json for ${tenant}`, null);
     }
 
+    // Only return username, never the password hash or sensitive info in response
     return json(res, 200, { ok: true, tenant, pendingUser: username });
   } catch (e: any) {
     console.error('[api/users-register] CRASH', e);

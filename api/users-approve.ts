@@ -5,6 +5,7 @@ export const config = { runtime: "nodejs" } as const;
  * - moves from data/<tenant>/pending.json to data/<tenant>/users.json
  * - adds username to allowed[]
  * - stores the pending password under passwords[username]
+ * - if the pending value is plaintext it will be hashed with bcryptjs before being stored
  * Body: { tenant?: string, username: string }
  * Requires x-admin-secret.
  */
@@ -207,6 +208,21 @@ export default async function handler(req: any) {
   const { data: users,   sha: usersSha }   = await readJsonFromRepo<UsersJson>(usersPath, { allowed: ["admin"], passwords: {} });
   const { data: pending, sha: pendingSha } = await readJsonFromRepo<PendingJson>(pendingPath, {});
   const pw = pending[username];
+
+  // Support both legacy plaintext pending values and new bcrypt-hashed values.
+  // If the pending value is not a bcrypt hash, hash it before storing in users.json.
+  let passwordToStore = pw;
+  const looksLikeBcrypt = typeof pw === "string" && /^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$/.test(pw);
+  if (typeof pw === "string" && !looksLikeBcrypt) {
+    try {
+      const { hash } = await import("bcryptjs");
+      passwordToStore = await hash(pw, 10);
+    } catch (e) {
+      // If bcrypt is not available for some reason, fail safe rather than storing plaintext
+      return err(500, "hashing-failed", { message: String((e as any)?.message || e) });
+    }
+  }
+
   if (!pw) return err(404, "not-pending");
 
   // update users
@@ -215,7 +231,7 @@ export default async function handler(req: any) {
   allowedSet.add(username);
   const nextUsers: UsersJson = {
     allowed: Array.from(allowedSet),
-    passwords: { ...(users.passwords || {}), [username]: pw },
+    passwords: { ...(users.passwords || {}), [username]: passwordToStore },
   };
 
   // remove from pending

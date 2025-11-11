@@ -56,7 +56,6 @@ const BRAND_TITLE = "Speisekarte Urixsoft";
 const LOGO_SRC = "/logo.png";
 const ADMIN_TOKEN_KEY = "qrmenu.admin.token";
 const ADMIN_USER_KEY = "qrmenu.admin.user";
-const ADMIN_PASSWORD = "admin123"; // Demo-Passwort – später ersetzen
 
 // --- Server API helpers for user management (sync across devices) ---
 const ADMIN_SECRET = (import.meta as any).env.VITE_ADMIN_SECRET || "";
@@ -86,13 +85,8 @@ type UsersResponse = {
   passwords?: Record<string, string>;
 };
 
-async function apiUsersGet(tenant: string, includePasswords = false): Promise<UsersResponse> {
-  const headers: Record<string, string> = {};
-  if (includePasswords) {
-    const secret = getAdminSecret();
-    if (secret) headers["x-admin-secret"] = secret;
-  }
-  const r = await fetch(`/api/users?tenant=${encodeURIComponent(tenant)}`, { headers, cache: "no-store" });
+async function apiUsersGet(tenant: string): Promise<UsersResponse> {
+  const r = await fetch(`/api/users?tenant=${encodeURIComponent(tenant)}`, { cache: "no-store" });
   if (!r.ok) return { ok: false, allowed: ["admin"], pending: {} };
   return r.json();
 }
@@ -425,31 +419,31 @@ function PublicApp() {
   async function handleLoginSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoginError(null);
-    const username = loginUsername.trim();
+    const username = loginUsername.trim().toLowerCase();
     const password = loginPassword;
     if (!username || !password) {
       setLoginError("Bitte Benutzername und Passwort eingeben.");
       return;
     }
     try {
-      const t = getTenantKey();
-      const j = await apiUsersGet(t, true);
-      const allowed = j.allowed || ["admin"];
-      if (!allowed.includes(username)) {
-        setLoginError("Unbekannter Benutzer.");
+      const tenant = getTenantKey();
+      const r = await fetch("/api/users-login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tenant, username, password }),
+      });
+      let data: any = {};
+      try { data = await r.json(); } catch {}
+      if (!r.ok || !data?.ok) {
+        const code = data?.error || "login-failed";
+        if (code === "unauthorized") setLoginError("Unbekannter Benutzer oder nicht freigegeben.");
+        else if (code === "no-password") setLoginError("Kein Passwort gesetzt. Bitte Admin kontaktieren.");
+        else if (code === "invalid-password") setLoginError("Falsches Passwort.");
+        else if (code === "missing-credentials") setLoginError("Benutzername und Passwort erforderlich.");
+        else setLoginError("Login fehlgeschlagen.");
         return;
       }
-      const pwMap = (j.passwords || {}) as Record<string, string>;
-      let stored = pwMap[username];
-      if (!stored && username === "admin") stored = ADMIN_PASSWORD;
-      if (!stored) {
-        setLoginError("Kein Passwort gesetzt.");
-        return;
-      }
-      if (password !== stored) {
-        setLoginError("Falsches Passwort.");
-        return;
-      }
+      // success
       sessionStorage.setItem(ADMIN_TOKEN_KEY, "1");
       sessionStorage.setItem(ADMIN_USER_KEY, username);
       setLoginOpen(false);
@@ -457,7 +451,8 @@ function PublicApp() {
       setLoginPassword("");
       setLoginError(null);
       window.location.hash = "/admin";
-    } catch {
+    } catch (err) {
+      console.error("/api/users-login failed", err);
       setLoginError("Login fehlgeschlagen.");
     }
   }
