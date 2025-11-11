@@ -1,10 +1,5 @@
 {
   "allowed": [
-    "admin",
-    "a"
-  ],
-  "passwords": {
-    "admin": "$2b$10$KXRGpH3pG5IT8qBHxpPBqOgNPkiQl9austqxKCjK4DlY3WIa.Orhy",
-    "a": "$2b$10$ZrbUWe2t4LAkrU7HZadhrejjWNIGhiYIz8b/XiGKgyQdRA/xeSHhG"
-  }
+    "admin"
+  ]
 }
