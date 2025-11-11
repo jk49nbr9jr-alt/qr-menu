@@ -828,7 +828,10 @@ function PublicApp() {
                 className={idx === 0 ? 'pt-1' : 'pt-6 mt-6 border-t'}
                 id={`sec-${c}`}
               >
-                <h2 className="text-xl font-semibold mb-3 px-1">{c}</h2>
+                <h2 className="text-2xl sm:text-3xl font-bold tracking-wide text-neutral-900 dark:text-neutral-100 mb-4 px-1 flex items-center gap-3">
+                  <span className="inline-block h-5 w-1.5 rounded-full bg-amber-500" />
+                  {c}
+                </h2>
                 <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
                   {items.map((item) => (
                     <Card key={item.id}>
@@ -1463,7 +1466,10 @@ function AdminApp() {
                 className={idx === 0 ? 'pt-1' : 'pt-6 mt-6 border-t'}
                 id={`sec-${c}`}
               >
-                <h2 className="text-xl font-semibold mb-3 px-1">{c}</h2>
+                <h2 className="text-2xl sm:text-3xl font-bold tracking-wide text-neutral-900 dark:text-neutral-100 mb-4 px-1 flex items-center gap-3">
+                  <span className="inline-block h-5 w-1.5 rounded-full bg-amber-500" />
+                  {c}
+                </h2>
                 <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
                   {items.map((item) => (
                     <Card key={item.id}>
