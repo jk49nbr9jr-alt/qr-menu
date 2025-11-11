@@ -909,7 +909,7 @@ function PublicApp() {
 
       <footer className="px-4 py-6 text-sm text-neutral-600 border-t mt-6 dark:text-neutral-400 dark:border-neutral-800">
         <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="flex items-center gap-6">
+          <div className="flex flex-col sm:flex-row items-center sm:items-center gap-2 sm:gap-6 text-center sm:text-left">
             <a href="#/terms" className="hover:text-amber-600 underline">Nutzungsbedingungen</a>
             <a href="#/privacy" className="hover:text-amber-600 underline">Datenschutzerklärung</a>
             <a href="#/cookies" className="hover:text-amber-600 underline">Cookie&nbsp;Policy</a>
@@ -1558,7 +1558,7 @@ function AdminApp() {
 
       <footer className="px-4 py-6 text-sm text-neutral-600 border-t mt-6 dark:text-neutral-400 dark:border-neutral-800">
         <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="flex items-center gap-6">
+          <div className="flex flex-col sm:flex-row items-center sm:items-center gap-2 sm:gap-6 text-center sm:text-left">
             <a href="#/terms" className="hover:text-amber-600 underline">Nutzungsbedingungen</a>
             <a href="#/privacy" className="hover:text-amber-600 underline">Datenschutzerklärung</a>
             <a href="#/cookies" className="hover:text-amber-600 underline">Cookie&nbsp;Policy</a>
