@@ -30,6 +30,33 @@ function sanitizeTenant(input?: string) {
   return clean || "speisekarte";
 }
 
+function validatePasswordStrength(pwd: string): { ok: true; score: number } | { ok: false; score: number; message: string } {
+  const length = pwd.length;
+  const hasLower = /[a-z]/.test(pwd);
+  const hasUpper = /[A-Z]/.test(pwd);
+  const hasDigit = /[0-9]/.test(pwd);
+  const hasSpecial = /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?`~]/.test(pwd);
+  const tooCommon = /(password|123456|qwerty|letmein|welcome|iloveyou)/i.test(pwd);
+
+  // score (0–6)
+  let score = 0;
+  if (length >= 8) score++;
+  if (length >= 12) score++;
+  if (hasLower) score++;
+  if (hasUpper) score++;
+  if (hasDigit) score++;
+  if (hasSpecial) score++;
+
+  if (tooCommon) return { ok: false, score, message: "Passwort ist zu verbreitet/leicht zu erraten." };
+  if (length < 8) return { ok: false, score, message: "Mindestens 8 Zeichen erforderlich." };
+  if (!hasLower) return { ok: false, score, message: "Mindestens ein Kleinbuchstabe erforderlich." };
+  if (!hasUpper) return { ok: false, score, message: "Mindestens ein Großbuchstabe erforderlich." };
+  if (!hasDigit) return { ok: false, score, message: "Mindestens eine Ziffer erforderlich." };
+  if (!hasSpecial) return { ok: false, score, message: "Mindestens ein Sonderzeichen erforderlich." };
+
+  return { ok: true, score };
+}
+
 async function readJsonBody<T = any>(req: IncomingMessage): Promise<T> {
   const chunks: Buffer[] = [];
   for await (const chunk of req) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
@@ -77,6 +104,12 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     if (!tenant)   return json(res, 400, { ok: false, error: "tenant missing" });
     if (!username || !password) return json(res, 400, { ok: false, error: "invalid input" });
 
+    // Enforce server-side password strength policy
+    const vs = validatePasswordStrength(password);
+    if (!vs.ok) {
+      return json(res, 400, { ok: false, error: "weak-password", message: vs.message, score: vs.score });
+    }
+
     // ---- read existing users file ----
     const path = `/repos/${GH_OWNER}/${GH_REPO}/contents/data/${tenant}/users.json`;
 
@@ -120,7 +153,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     await gh(path, { method: "PUT", body: JSON.stringify(payload) });
 
     // Do not return the hash
-    return json(res, 200, { ok: true, username, tenant });
+    return json(res, 200, { ok: true, username, tenant /* strength: vs.score is not available here, intentionally omitted */ });
   } catch (err: any) {
     return json(res, 500, { ok: false, error: String(err?.message || err) });
   }

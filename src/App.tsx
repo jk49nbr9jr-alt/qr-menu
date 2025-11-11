@@ -1,4 +1,18 @@
+
 import React, { useEffect, useMemo, useRef, useState } from "react";
+
+// Simple client-side password strength estimator (0–6) + common-password check
+function pwStrength(pwd: string) {
+  let score = 0;
+  if (pwd.length >= 8) score++;
+  if (pwd.length >= 12) score++;
+  if (/[a-z]/.test(pwd)) score++;
+  if (/[A-Z]/.test(pwd)) score++;
+  if (/[0-9]/.test(pwd)) score++;
+  if (/[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?`~]/.test(pwd)) score++;
+  const tooCommon = /(password|123456|qwerty|letmein|welcome|iloveyou)/i.test(pwd);
+  return { score, tooCommon };
+}
 
 /* ---------- kleine UI-Helpers (Tailwind) ---------- */
 type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & { className?: string; pill?: boolean };
@@ -414,6 +428,8 @@ function PublicApp() {
   const [regError, setRegError] = useState<string | null>(null);
   const [regDone, setRegDone] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [regStrength, setRegStrength] = useState(0);
+  const [regTooCommon, setRegTooCommon] = useState(false);
 
   // --- Login Modal Handler (Server) ---
   async function handleLoginSubmit(e: React.FormEvent) {
@@ -552,6 +568,13 @@ function PublicApp() {
                 const p = regPassword;
                 if (!u || !p) { setRegError("Bitte Benutzername und Passwort eingeben."); setIsSending(false); return; }
                 if (u.toLowerCase() === "admin") { setRegError("Dieser Benutzername ist reserviert."); setIsSending(false); return; }
+                // (Optional lightweight client validation before submit)
+                const cc = pwStrength(p);
+                if (p.length < 8 || !( /[a-z]/.test(p) && /[A-Z]/.test(p) && /[0-9]/.test(p) && /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?`~]/.test(p) ) || cc.tooCommon) {
+                  setRegError("Passwort erfüllt die Mindestanforderungen nicht.");
+                  setIsSending(false);
+                  return;
+                }
                 try {
                   await serverRegister(u, p);
                   setRegDone(true);
@@ -574,7 +597,36 @@ function PublicApp() {
                   </label>
                   <label className="text-sm">
                     <div>Passwort</div>
-                    <Input type="password" value={regPassword} onChange={e => setRegPassword(e.target.value)} placeholder="Passwort" disabled={isSending} />
+                    <Input
+                      type="password"
+                      value={regPassword}
+                      onChange={e => {
+                        const v = e.target.value;
+                        setRegPassword(v);
+                        const s = pwStrength(v);
+                        setRegStrength(s.score);
+                        setRegTooCommon(s.tooCommon);
+                      }}
+                      placeholder="Passwort"
+                      disabled={isSending}
+                    />
+                    <div className="mt-2">
+                      <div className="w-full h-2 bg-neutral-200 rounded-full overflow-hidden">
+                        <div
+                          className={
+                            "h-2 transition-all " +
+                            (regStrength <= 2 ? "bg-red-500 w-2/6" : regStrength <= 4 ? "bg-yellow-500 w-4/6" : "bg-green-600 w-full")
+                          }
+                        />
+                      </div>
+                      <div className="flex justify-between text-[11px] text-neutral-600 mt-1">
+                        <span>{regStrength <= 2 ? "Schwach" : regStrength <= 4 ? "Mittel" : "Stark"}</span>
+                        {regTooCommon && <span className="text-red-600">Zu häufiges Passwort</span>}
+                      </div>
+                      <div className="text-[11px] text-neutral-500 mt-1">
+                        Mindestanforderung: 8+ Zeichen, Groß-/Kleinbuchstaben, Zahl und Sonderzeichen.
+                      </div>
+                    </div>
                   </label>
                   {regError && <div className="text-xs text-red-600">{regError}</div>}
                   <div className="flex items-center justify-end gap-2 pt-2">
@@ -764,6 +816,8 @@ function AdminApp() {
   const [newPw, setNewPw] = useState("");
   const [confirmPw, setConfirmPw] = useState("");
   const [pwError, setPwError] = useState<string | null>(null);
+  const [pwScore, setPwScore] = useState(0);
+  const [pwTooCommon, setPwTooCommon] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // --- Notification State ---
@@ -1503,9 +1557,33 @@ function AdminApp() {
                 type="password"
                 className="mt-1"
                 value={newPw}
-                onChange={(e) => setNewPw(e.target.value)}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setNewPw(v);
+                  const s = pwStrength(v);
+                  setPwScore(s.score);
+                  setPwTooCommon(s.tooCommon);
+                  if (pwError) setPwError(null);
+                }}
                 placeholder="••••••••"
               />
+              <div className="mt-2">
+                <div className="w-full h-2 bg-neutral-200 rounded-full overflow-hidden">
+                  <div
+                    className={
+                      "h-2 transition-all " +
+                      (pwScore <= 2 ? "bg-red-500 w-2/6" : pwScore <= 4 ? "bg-yellow-500 w-4/6" : "bg-green-600 w-full")
+                    }
+                  />
+                </div>
+                <div className="flex justify-between text-[11px] text-neutral-600 mt-1">
+                  <span>{pwScore <= 2 ? "Schwach" : pwScore <= 4 ? "Mittel" : "Stark"}</span>
+                  {pwTooCommon && <span className="text-red-600">Zu häufiges Passwort</span>}
+                </div>
+                <div className="text-[11px] text-neutral-500 mt-1">
+                  Mindestanforderung: 8+ Zeichen, Groß-/Kleinbuchstaben, Zahl und Sonderzeichen.
+                </div>
+              </div>
             </label>
             <label className="text-sm block mb-2">
               Passwort bestätigen
@@ -1523,8 +1601,17 @@ function AdminApp() {
               <PrimaryBtn
                 disabled={!newPw || !confirmPw}
                 onClick={async () => {
+                  // Basic client validation
                   if (newPw !== confirmPw) {
                     setPwError("Passwörter stimmen nicht überein.");
+                    return;
+                  }
+                  if (
+                    newPw.length < 8 ||
+                    !(/[a-z]/.test(newPw) && /[A-Z]/.test(newPw) && /[0-9]/.test(newPw) && /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?`~]/.test(newPw)) ||
+                    pwTooCommon
+                  ) {
+                    setPwError("Passwort zu schwach (8+, Groß/Klein, Zahl, Sonderzeichen, nicht zu häufig).");
                     return;
                   }
                   try {
@@ -1535,8 +1622,12 @@ function AdminApp() {
                     setNewPw("");
                     setConfirmPw("");
                     setPwError(null);
+                    setPwScore(0);
+                    setPwTooCommon(false);
                   } catch (err: any) {
-                    setPwError("Fehler: " + (err?.message || "unbekannt"));
+                    // Attempt to surface API error body if present
+                    const msg = String(err?.message || "unbekannt");
+                    setPwError("Fehler: " + msg);
                   }
                 }}
               >

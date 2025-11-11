@@ -13,6 +13,32 @@ function sanitizeTenant(t?: string) {
   return clean || 'speisekarte';
 }
 
+function validatePasswordStrength(pwd: string): { ok: true; score: number } | { ok: false; score: number; message: string } {
+  const length = pwd.length;
+  const hasLower = /[a-z]/.test(pwd);
+  const hasUpper = /[A-Z]/.test(pwd);
+  const hasDigit = /[0-9]/.test(pwd);
+  const hasSpecial = /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?`~]/.test(pwd);
+  const tooCommon = /(password|123456|qwerty|letmein|welcome|iloveyou)/i.test(pwd);
+
+  let score = 0;
+  if (length >= 8) score++;
+  if (length >= 12) score++;
+  if (hasLower) score++;
+  if (hasUpper) score++;
+  if (hasDigit) score++;
+  if (hasSpecial) score++;
+
+  if (tooCommon) return { ok: false, score, message: "Passwort ist zu verbreitet/leicht zu erraten." };
+  if (length < 8) return { ok: false, score, message: "Mindestens 8 Zeichen erforderlich." };
+  if (!hasLower) return { ok: false, score, message: "Mindestens ein Kleinbuchstabe erforderlich." };
+  if (!hasUpper) return { ok: false, score, message: "Mindestens ein Großbuchstabe erforderlich." };
+  if (!hasDigit) return { ok: false, score, message: "Mindestens eine Ziffer erforderlich." };
+  if (!hasSpecial) return { ok: false, score, message: "Mindestens ein Sonderzeichen erforderlich." };
+
+  return { ok: true, score };
+}
+
 function buildURL(req: IncomingMessage) {
   const proto = (req.headers['x-forwarded-proto'] as string) || 'https';
   const host  = (req.headers['x-forwarded-host'] as string) || (req.headers.host as string) || 'localhost';
@@ -109,8 +135,14 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     const body = await readJsonBody<{ username?: string; password?: string; tenant?: string }>(req);
 
     const tenant = sanitizeTenant(body.tenant || url.searchParams.get('tenant') || undefined);
-    let username = (body.username || '').toString().trim().toLowerCase(); // <— FIX: normalisieren
+    let username = (body.username || '').toString().trim().toLowerCase();
     const password = (body.password || '').toString();
+
+    // Server-side password strength policy
+    const vs = validatePasswordStrength(password);
+    if (!vs.ok) {
+      return json(res, 400, { ok: false, error: 'weak-password', message: vs.message, score: vs.score });
+    }
 
     // Hash password before writing to GitHub (no plaintext in repo)
     const { hash } = await import('bcryptjs');
