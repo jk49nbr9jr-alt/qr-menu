@@ -6,3 +6,11 @@ html, body {
   @apply bg-neutral-50 text-neutral-900;
   font-family: system-ui, -apple-system, sans-serif;
 }
+:root { color-scheme: light dark; }
+
+/* Safe-Area Helfer für Notch & Home-Indicator */
+.safe-pt { padding-top: env(safe-area-inset-top); }
+.safe-pb { padding-bottom: env(safe-area-inset-bottom); }
+
+/* Falls du lieber Tailwind Utility ähnlich möchtest, reicht das hier.
+   (Keine extra Tailwind-Konfig nötig.) */

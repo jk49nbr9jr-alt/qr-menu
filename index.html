@@ -8,11 +8,28 @@
     <!-- Theme color for light/dark (used by mobile browser UI) -->
     <meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff" />
     <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0a0a0a" />
-    <!-- iOS PWA-style options (safe to keep even if no manifest yet) -->
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <title>Speisekarte Urixsoft</title>
+    <!-- iOS Safe Areas -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Urixsoft QR-Speisekarte" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-touch-fullscreen" content="yes" />
+
+    <!-- Ensure background color matches theme to avoid white bars -->
+    <style>
+      html, body {
+        background-color: #0a0a0a;
+        color-scheme: light dark;
+        min-height: 100%;
+        margin: 0;
+        padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+      }
+
+      @media (prefers-color-scheme: light) {
+        html, body {
+          background-color: #ffffff;
+        }
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>
