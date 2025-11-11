@@ -713,7 +713,7 @@ function PublicApp() {
         </div>
       )}
       {searchOpen && (
-        <div className="border-b bg-white">
+        <div className="border-b bg-white dark:bg-neutral-900">
           <div className="max-w-5xl mx-auto p-3">
             <Input
               autoFocus
@@ -740,7 +740,7 @@ function PublicApp() {
                 {/* Suche öffnen */}
                 <button
                   aria-label="Suche"
-                  className="inline-flex items-center justify-center rounded-full w-10 h-10 border border-neutral-300 text-neutral-500 bg-transparent hover:text-neutral-700 hover:border-neutral-400"
+                  className="inline-flex items-center justify-center px-1 text-neutral-600 hover:text-neutral-900 dark:text-neutral-300 dark:hover:text-white"
                   onClick={() => setSearchOpen((v) => !v)}
                 >
                   🔍
@@ -748,7 +748,7 @@ function PublicApp() {
                 {/* Hamburger zum Öffnen der Liste */}
                 <button
                   aria-label="Menü"
-                  className="inline-flex items-center justify-center rounded-full w-10 h-10 border border-neutral-300 text-neutral-500 bg-transparent hover:text-neutral-700 hover:border-neutral-400"
+                  className="inline-flex items-center justify-center px-1 text-neutral-600 hover:text-neutral-900 dark:text-neutral-300 dark:hover:text-white"
                   onClick={() => setNavOpen(true)}
                 >
                   ≡
@@ -1304,7 +1304,7 @@ function AdminApp() {
       </header>
       <div style={{ height: headerH }} />
       {searchOpen && (
-        <div className="border-b bg-white">
+        <div className="border-b bg-white dark:bg-neutral-900">
           <div className="max-w-5xl mx-auto p-3">
             <Input
               autoFocus
@@ -1331,7 +1331,7 @@ function AdminApp() {
                 {/* Suche öffnen */}
                 <button
                   aria-label="Suche"
-                  className="inline-flex items-center justify-center rounded-full w-10 h-10 border border-neutral-300 text-neutral-500 bg-transparent hover:text-neutral-700 hover:border-neutral-400"
+                  className="inline-flex items-center justify-center px-1 text-neutral-600 hover:text-neutral-900 dark:text-neutral-300 dark:hover:text-white"
                   onClick={() => setSearchOpen((v) => !v)}
                 >
                   🔍
@@ -1339,7 +1339,7 @@ function AdminApp() {
                 {/* Hamburger */}
                 <button
                   aria-label="Menü"
-                  className="inline-flex items-center justify-center rounded-full w-10 h-10 border border-neutral-300 text-neutral-500 bg-transparent hover:text-neutral-700 hover:border-neutral-400"
+                  className="inline-flex items-center justify-center px-1 text-neutral-600 hover:text-neutral-900 dark:text-neutral-300 dark:hover:text-white"
                   onClick={() => setNavOpen(true)}
                 >
                   ≡
