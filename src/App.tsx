@@ -758,7 +758,6 @@ function AdminApp() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<MenuItem | null>(null);
   const [authed, setAuthed] = useState<boolean>(typeof window !== 'undefined' && sessionStorage.getItem(ADMIN_TOKEN_KEY) === '1');
-  const [password, setPassword] = useState("");
   const [username, setUsername] = useState<string>(() => {
     if (typeof window !== "undefined") return sessionStorage.getItem(ADMIN_USER_KEY) || "";
     return "";
@@ -996,17 +995,6 @@ function AdminApp() {
     setCat(fromCat);
   }
 
-  function login(e: React.FormEvent) {
-    e.preventDefault();
-    if (password === ADMIN_PASSWORD) {
-      sessionStorage.setItem(ADMIN_TOKEN_KEY, '1');
-      sessionStorage.setItem(ADMIN_USER_KEY, "admin");
-      setUsername("admin");
-      setAuthed(true);
-    } else {
-      alert('Falsches Passwort');
-    }
-  }
 
   // Passwort ändern (Server)
   function changePassword() {
@@ -1047,7 +1035,9 @@ function AdminApp() {
   }
 
   if (!authed) {
-    window.location.hash = "/";
+    if (typeof window !== "undefined") {
+      window.location.hash = "/";
+    }
     return null;
   }
 
