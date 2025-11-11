@@ -44,6 +44,16 @@ function pwStrength(pwd: string) {
   return { score, tooCommon };
 }
 
+// Small debounce hook for performance-sensitive inputs (e.g., search)
+function useDebouncedValue<T>(value: T, delay = 250) {
+  const [debounced, setDebounced] = React.useState(value);
+  React.useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(t);
+  }, [value, delay]);
+  return debounced;
+}
+
 /* ---------- kleine UI-Helpers (Tailwind) ---------- */
 type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & { className?: string; pill?: boolean };
 type InputProps = React.InputHTMLAttributes<HTMLInputElement> & { className?: string };
@@ -402,7 +412,8 @@ const Editor: React.FC<EditorProps> = ({ open, item, menu, onClose, onSave }) =>
 function PublicApp() {
   const [menu, setMenu] = useState<MenuItem[] | null>(null);
   const [cat, setCat] = useState("");
-  const [search, setSearch] = useState("");
+  const [searchRaw, setSearchRaw] = useState("");
+  const search = useDebouncedValue(searchRaw, 300);
   const [, setFilterOn] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -718,8 +729,8 @@ function PublicApp() {
             <Input
               autoFocus
               placeholder="Suche im Menü..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              value={searchRaw}
+              onChange={(e) => setSearchRaw(e.target.value)}
             />
           </div>
         </div>
@@ -740,7 +751,7 @@ function PublicApp() {
                 {/* Suche öffnen */}
                 <button
                   aria-label="Suche"
-                  className="inline-flex items-center justify-center px-1 text-neutral-600 hover:text-neutral-900 dark:text-neutral-300 dark:hover:text-white"
+                  className="inline-flex items-center justify-center px-1 text-neutral-600 hover:text-neutral-900 dark:text-neutral-300 dark:hover:text-white rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/60 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-neutral-900"
                   onClick={() => setSearchOpen((v) => !v)}
                 >
                   🔍
@@ -748,7 +759,7 @@ function PublicApp() {
                 {/* Hamburger zum Öffnen der Liste */}
                 <button
                   aria-label="Menü"
-                  className="inline-flex items-center justify-center px-1 text-neutral-600 hover:text-neutral-900 dark:text-neutral-300 dark:hover:text-white"
+                  className="inline-flex items-center justify-center px-1 text-neutral-600 hover:text-neutral-900 dark:text-neutral-300 dark:hover:text-white rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/60 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-neutral-900"
                   onClick={() => setNavOpen(true)}
                 >
                   ≡
@@ -872,7 +883,8 @@ function AdminApp() {
 
   const [menu, setMenu] = useState<MenuItem[] | null>(null);
   const [cat, setCat] = useState("");
-  const [search, setSearch] = useState("");
+  const [searchRaw, setSearchRaw] = useState("");
+  const search = useDebouncedValue(searchRaw, 300);
   const [, setFilterOn] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<MenuItem | null>(null);
@@ -1309,8 +1321,8 @@ function AdminApp() {
             <Input
               autoFocus
               placeholder="Suche im Menü..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              value={searchRaw}
+              onChange={(e) => setSearchRaw(e.target.value)}
             />
           </div>
         </div>
@@ -1331,7 +1343,7 @@ function AdminApp() {
                 {/* Suche öffnen */}
                 <button
                   aria-label="Suche"
-                  className="inline-flex items-center justify-center px-1 text-neutral-600 hover:text-neutral-900 dark:text-neutral-300 dark:hover:text-white"
+                  className="inline-flex items-center justify-center px-1 text-neutral-600 hover:text-neutral-900 dark:text-neutral-300 dark:hover:text-white rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/60 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-neutral-900"
                   onClick={() => setSearchOpen((v) => !v)}
                 >
                   🔍
@@ -1339,7 +1351,7 @@ function AdminApp() {
                 {/* Hamburger */}
                 <button
                   aria-label="Menü"
-                  className="inline-flex items-center justify-center px-1 text-neutral-600 hover:text-neutral-900 dark:text-neutral-300 dark:hover:text-white"
+                  className="inline-flex items-center justify-center px-1 text-neutral-600 hover:text-neutral-900 dark:text-neutral-300 dark:hover:text-white rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/60 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-neutral-900"
                   onClick={() => setNavOpen(true)}
                 >
                   ≡
