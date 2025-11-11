@@ -248,6 +248,47 @@ function getTenantKey() {
   return first;
 }
 
+/* ---------- Statische Info-Seiten ---------- */
+type PageWrapperProps = React.PropsWithChildren<{ title: string }>;
+const PageWrapper = ({ title, children }: PageWrapperProps) => (
+  <div className="min-h-screen bg-neutral-50 text-neutral-900 dark:bg-neutral-950 dark:text-neutral-100">
+    <header className="bg-white border-b dark:bg-neutral-900 dark:border-neutral-800">
+      <div className="max-w-5xl mx-auto p-4">
+        <h1 className="text-2xl font-bold">{title}</h1>
+      </div>
+    </header>
+    <main className="max-w-5xl mx-auto p-4">
+      <div className="prose prose-neutral dark:prose-invert max-w-none">
+        {children}
+      </div>
+    </main>
+    <footer className="text-center py-4 text-sm text-neutral-500 border-t mt-6 dark:text-neutral-400 dark:border-neutral-800">
+      <a href="#/" className="underline hover:text-amber-600">Zurück zur Speisekarte</a>
+    </footer>
+  </div>
+);
+
+const Nutzungsbedingungen: React.FC = () => (
+  <PageWrapper title="Nutzungsbedingungen">
+    <p>Diese Demo-Speisekarte wird ohne Gewähr bereitgestellt. Inhalte können ohne Ankündigung geändert werden.</p>
+    <p>Die Nutzung erfolgt ausschließlich zu Test- und Demonstrationszwecken.</p>
+  </PageWrapper>
+);
+
+const Datenschutz: React.FC = () => (
+  <PageWrapper title="Datenschutzerklärung">
+    <p>Es werden keine Tracking-Cookies gesetzt. Technisch notwendige Daten (z.&nbsp;B. Server-Logs) können verarbeitet werden, um den Betrieb sicherzustellen.</p>
+    <p>Weitere Informationen oder Auskunft erhalten Sie beim Betreiber.</p>
+  </PageWrapper>
+);
+
+const CookiePolicy: React.FC = () => (
+  <PageWrapper title="Cookie Policy">
+    <p>Wir verwenden ausschließlich technisch notwendige Cookies (z.&nbsp;B. zur Speicherung Ihrer Einwilligung). Es findet kein Tracking statt.</p>
+    <p>Sie können Ihre Einwilligung jederzeit über die Browsereinstellungen löschen.</p>
+  </PageWrapper>
+);
+
 /* ---------- Public: Menü aus JSON laden ---------- */
 async function fetchMenu(tenant: string): Promise<MenuItem[]> {
   try {
@@ -299,7 +340,7 @@ const Editor: React.FC<EditorProps> = ({ open, item, menu, onClose, onSave }) =>
     <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center">
       <div className="w-full max-w-lg rounded-xl bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 shadow-xl border border-neutral-200 dark:border-neutral-800">
         <div className="p-4 border-b border-neutral-200 dark:border-neutral-800 flex items-center justify-between">
-          <div className="font-semibold">{item ? "Artikel bearbeiten" : "Neuer Artikel"}</div>
+          <div className="font-semibold">{item ? "Artikel bearbeiten" : "Neue Artikel"}</div>
           <Button onClick={onClose}>Schließen</Button>
         </div>
         <div className="p-4 grid grid-cols-1 gap-3">
@@ -866,8 +907,15 @@ function PublicApp() {
         )}
       </main>
 
-      <footer className="text-center py-4 text-sm text-neutral-500 border-t mt-6 dark:text-neutral-400 dark:border-neutral-800">
-        © {new Date().getFullYear()} QR-Speisekarte Urixsoft
+      <footer className="px-4 py-6 text-sm text-neutral-600 border-t mt-6 dark:text-neutral-400 dark:border-neutral-800">
+        <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="flex items-center gap-6">
+            <a href="#/terms" className="hover:text-amber-600 underline">Nutzungsbedingungen</a>
+            <a href="#/privacy" className="hover:text-amber-600 underline">Datenschutzerklärung</a>
+            <a href="#/cookies" className="hover:text-amber-600 underline">Cookie&nbsp;Policy</a>
+          </div>
+          <div>© {new Date().getFullYear()} QR-Speisekarte Urixsoft</div>
+        </div>
       </footer>
     </div>
   );
@@ -1309,7 +1357,7 @@ function AdminApp() {
 
         <div className="border-t">
           <div className="max-w-5xl mx-auto p-3 flex flex-wrap items-center gap-2">
-            <PrimaryBtn onClick={addItem}>+ Neuer Artikel</PrimaryBtn>
+            <PrimaryBtn onClick={addItem}>+ Neue Artikel</PrimaryBtn>
             <span className="text-xs text-neutral-500">Änderungen werden automatisch gespeichert.</span>
           </div>
         </div>
@@ -1508,8 +1556,15 @@ function AdminApp() {
         )}
       </main>
 
-      <footer className="text-center py-4 text-sm text-neutral-500 border-t mt-6 dark:text-neutral-400 dark:border-neutral-800">
-        © {new Date().getFullYear()} QR-Speisekarte Urixsoft
+      <footer className="px-4 py-6 text-sm text-neutral-600 border-t mt-6 dark:text-neutral-400 dark:border-neutral-800">
+        <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="flex items-center gap-6">
+            <a href="#/terms" className="hover:text-amber-600 underline">Nutzungsbedingungen</a>
+            <a href="#/privacy" className="hover:text-amber-600 underline">Datenschutzerklärung</a>
+            <a href="#/cookies" className="hover:text-amber-600 underline">Cookie&nbsp;Policy</a>
+          </div>
+          <div>© {new Date().getFullYear()} QR-Speisekarte Urixsoft</div>
+        </div>
       </footer>
 
       {/* Benutzerverwaltung modal */}
@@ -1770,7 +1825,12 @@ export default function App() {
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
 
-  const content = route.startsWith("/admin") ? <AdminApp /> : <PublicApp />;
+  let content: React.ReactNode;
+  if (route.startsWith("/admin")) content = <AdminApp />;
+  else if (route === "/terms") content = <Nutzungsbedingungen />;
+  else if (route === "/privacy") content = <Datenschutz />;
+  else if (route === "/cookies") content = <CookiePolicy />;
+  else content = <PublicApp />;
 
   return (
     <>
