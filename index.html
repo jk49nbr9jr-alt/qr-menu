@@ -2,40 +2,73 @@
 <html lang="de">
   <head>
     <meta charset="UTF-8" />
+    <!-- WICHTIG für iOS Vollbild über die Notch: -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="description" content="Digitale QR‑Speisekarte – gepflegt im Adminbereich, optimiert für Mobile, mit Dark‑Mode-Unterstützung." />
-    <meta name="color-scheme" content="light dark" />
-    <!-- Theme color for light/dark (used by mobile browser UI) -->
-    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff" />
-    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0a0a0a" />
-    <!-- iOS Safe Areas -->
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="Urixsoft QR-Speisekarte" />
-    <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-touch-fullscreen" content="yes" />
 
-    <!-- Ensure background color matches theme to avoid white bars -->
+    <!-- SEO / App-Beschreibung -->
+    <meta name="description" content="Digitale QR-Speisekarte – gepflegt im Adminbereich, optimiert für Mobile, mit Dark-Mode-Unterstützung." />
+    <meta name="color-scheme" content="light dark" />
+
+    <!-- Browser-UI Farben (oben/unten) -->
+    <meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <!-- Fallback falls das Media-Attribut ignoriert wird -->
+    <meta name="theme-color" content="#0a0a0a" />
+
+    <!-- iOS: PWA / Statusbar-Farbe (black-translucent = durchscheinend, nutzt Seitenhintergrund) -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <title>Speisekarte Urixsoft</title>
+
+    <!-- Hardening gegen weiße Ränder (iOS) -->
     <style>
-      html, body {
-        background-color: #0a0a0a;
+      /* 1) Hintergrundfarben auf html UND body erzwingen */
+      html {
+        background: #0a0a0a;           /* Dark-Default */
         color-scheme: light dark;
         min-height: 100%;
-        margin: 0;
-        padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+        height: 100%;
+      }
+      @media (prefers-color-scheme: light) {
+        html { background: #ffffff; }
       }
 
-      @media (prefers-color-scheme: light) {
-        html, body {
-          background-color: #ffffff;
+      body {
+        margin: 0;
+        background: transparent;       /* wir nutzen den html-Background */
+        min-height: 100%;
+        min-height: 100svh;            /* sicheres Viewport-Height auf iOS/Android */
+        /* 2) Safe-Area berücksichtigen, damit nix hinter Notch/UI klemmt */
+        padding-top: env(safe-area-inset-top, 0);
+        padding-left: env(safe-area-inset-left, 0);
+        padding-right: env(safe-area-inset-right, 0);
+        padding-bottom: env(safe-area-inset-bottom, 0);
+        -webkit-touch-callout: none;
+        -webkit-tap-highlight-color: transparent;
+        overscroll-behavior: none;     /* gegen Bounce/weißes Blitzen */
+      }
+
+      /* 3) Root-Container strecken */
+      #root {
+        min-height: calc(100svh - env(safe-area-inset-top, 0) - env(safe-area-inset-bottom, 0));
+        isolation: isolate;            /* verhindert Überblend-Artefakte */
+      }
+
+      /* 4) Falls irgendwo global bg: white gesetzt ist, hebeln wir das im Dark-Mode aus */
+      @media (prefers-color-scheme: dark) {
+        .force-dark-bg {
+          background: #0a0a0a !important;
         }
       }
     </style>
   </head>
-  <body>
+
+  <body class="force-dark-bg">
     <div id="root"></div>
-    <noscript>
-      Bitte aktivieren Sie JavaScript, um die digitale Speisekarte nutzen zu können.
-    </noscript>
+    <noscript>Bitte aktivieren Sie JavaScript, um die digitale Speisekarte nutzen zu können.</noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
