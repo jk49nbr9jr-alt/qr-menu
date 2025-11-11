@@ -311,9 +311,12 @@ type EditorProps = {
 };
 const Editor: React.FC<EditorProps> = ({ open, item, menu, onClose, onSave }) => {
   const [draft, setDraft] = useState<MenuItem>(item || { id: Math.random().toString(36).slice(2,9), name: "", desc: "", price: 0, img: "", category: "Burger" });
+  const [priceStr, setPriceStr] = useState<string>(item && item.price ? String(item.price) : "");
 
   useEffect(() => {
-    setDraft(item || { id: Math.random().toString(36).slice(2,9), name: "", desc: "", price: 0, img: "", category: "Burger" });
+    const next = item || { id: Math.random().toString(36).slice(2,9), name: "", desc: "", price: 0, img: "", category: "Burger" };
+    setDraft(next);
+    setPriceStr(next.price ? String(next.price) : "");
   }, [item, open]);
 
   const [catOpen, setCatOpen] = useState(false);
@@ -354,7 +357,20 @@ const Editor: React.FC<EditorProps> = ({ open, item, menu, onClose, onSave }) =>
           </label>
           <label className="text-sm">
             <div>Preis (€)</div>
-            <Input type="number" step="0.01" value={draft.price} onChange={e => setDraft({ ...draft, price: Number(e.target.value) })} />
+            <Input
+              type="text"
+              inputMode="decimal"
+              pattern="[0-9]*[.,]?[0-9]*"
+              placeholder="z. B. 9.90"
+              value={priceStr}
+              onChange={(e) => {
+                const raw = e.target.value;
+                setPriceStr(raw);
+                const normalized = raw.replace(",", ".").trim();
+                const n = normalized === "" ? NaN : Number(normalized);
+                setDraft({ ...draft, price: Number.isFinite(n) ? n : 0 });
+              }}
+            />
           </label>
           <label className="text-sm">
             <div>Bild-URL</div>
@@ -441,7 +457,9 @@ const Editor: React.FC<EditorProps> = ({ open, item, menu, onClose, onSave }) =>
 
           <div className="flex items-center justify-end gap-2 pt-2">
             <Button onClick={onClose}>Abbrechen</Button>
-            <PrimaryBtn onClick={() => onSave(draft)} disabled={!draft.name || !draft.price}>Speichern</PrimaryBtn>
+            <PrimaryBtn onClick={() => onSave(draft)} disabled={!draft.name || !priceStr.trim()}>
+              Speichern
+            </PrimaryBtn>
           </div>
         </div>
       </div>
