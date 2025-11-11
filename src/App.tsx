@@ -1,5 +1,35 @@
 
+
 import React, { useEffect, useMemo, useRef, useState } from "react";
+
+// --- Dark Mode: follow system preference, allow optional local override via localStorage('theme' = 'dark' | 'light') ---
+function useSystemThemeSync() {
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const root = document.documentElement;
+    const saved = localStorage.getItem("theme"); // 'dark' | 'light' | null
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+
+    function apply(mode: "dark" | "light") {
+      if (mode === "dark") root.classList.add("dark");
+      else root.classList.remove("dark");
+    }
+
+    if (saved === "dark" || saved === "light") {
+      apply(saved);
+    } else {
+      apply(mq.matches ? "dark" : "light");
+    }
+
+    const onChange = (e: MediaQueryListEvent) => {
+      // Only auto-update if user hasn't explicitly chosen a theme
+      const manual = localStorage.getItem("theme");
+      if (!manual) apply(e.matches ? "dark" : "light");
+    };
+    mq.addEventListener?.("change", onChange);
+    return () => mq.removeEventListener?.("change", onChange);
+  }, []);
+}
 
 // Simple client-side password strength estimator (0–6) + common-password check
 function pwStrength(pwd: string) {
@@ -23,7 +53,8 @@ const Button: React.FC<ButtonProps> = ({ className = "", pill = false, ...props 
   const radius = pill ? "rounded-full" : "rounded-md";
   return (
     <button
-      className={("inline-flex items-center justify-center gap-2 " + radius + " border border-neutral-300 bg-white px-3 py-2 text-sm hover:bg-neutral-100 active:bg-neutral-200 disabled:opacity-50 " + className).trim()}
+      className={("inline-flex items-center justify-center gap-2 " + radius + " border border-neutral-300 bg-white px-3 py-2 text-sm hover:bg-neutral-100 active:bg-neutral-200 disabled:opacity-50 " +
+        "dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100 hover:dark:bg-neutral-700 active:dark:bg-neutral-600 " + className).trim()}
       {...props}
     />
   );
@@ -32,13 +63,14 @@ const PrimaryBtn: React.FC<ButtonProps> = ({ className = "", pill = false, ...pr
   const radius = pill ? "rounded-full" : "rounded-md";
   return (
     <button
-      className={("inline-flex items-center justify-center gap-2 " + radius + " bg-black text-white px-3 py-2 text-sm hover:opacity-90 active:opacity-80 disabled:opacity-50 " + className).trim()}
+      className={("inline-flex items-center justify-center gap-2 " + radius + " bg-black text-white px-3 py-2 text-sm hover:opacity-90 active:opacity-80 disabled:opacity-50 " +
+        "dark:bg-white dark:text-black " + className).trim()}
       {...props}
     />
   );
 };
 const Card: React.FC<DivProps> = ({ className = "", children, ...rest }) => (
-  <div className={("rounded-xl border bg-white " + className).trim()} {...rest}>{children}</div>
+  <div className={("rounded-xl border bg-white dark:bg-neutral-900 dark:border-neutral-700 " + className).trim()} {...rest}>{children}</div>
 );
 const CardHeader: React.FC<DivProps> = ({ className = "", children, ...rest }) => (
   <div className={("p-4 " + className).trim()} {...rest}>{children}</div>
@@ -50,11 +82,13 @@ const CardContent: React.FC<DivProps> = ({ className = "", children, ...rest }) 
   <div className={("p-4 pt-0 " + className).trim()} {...rest}>{children}</div>
 );
 const Input: React.FC<InputProps> = ({ className = "", ...props }) => (
-  <input className={("w-full rounded-md border border-neutral-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black/10 " + className).trim()} {...props} />
+  <input className={("w-full rounded-md border border-neutral-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black/10 " +
+    "dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-100 dark:placeholder-neutral-400 dark:focus:ring-white/10 " + className).trim()} {...props} />
 );
 
 const TextArea: React.FC<React.TextareaHTMLAttributes<HTMLTextAreaElement>> = ({ className = "", ...props }) => (
-  <textarea className={("w-full rounded-md border border-neutral-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black/10 " + className).trim()} {...props} />
+  <textarea className={("w-full rounded-md border border-neutral-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black/10 " +
+    "dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-100 dark:placeholder-neutral-400 dark:focus:ring-white/10 " + className).trim()} {...props} />
 );
 
 // --- Inline Cookie Banner (no tracking, simple consent stored in localStorage) ---
@@ -69,7 +103,7 @@ function CookieBanner() {
   if (!visible) return null;
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 bg-neutral-900 text-white p-4 shadow-lg">
+    <div className="fixed bottom-0 left-0 right-0 z-50 bg-neutral-900 text-white p-4 shadow-lg dark:bg-neutral-800">
       <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center gap-3">
         <p className="text-sm leading-snug text-center sm:text-left">
           🍪 Wir verwenden nur technisch notwendige Cookies, um diese Seite funktionsfähig zu machen.
@@ -509,8 +543,8 @@ function PublicApp() {
   }
 
   return (
-    <div className="min-h-screen bg-neutral-50 text-neutral-900">
-      <header className="bg-white border-b">
+    <div className="min-h-screen bg-neutral-50 text-neutral-900 dark:bg-neutral-950 dark:text-neutral-100">
+      <header className="bg-white border-b dark:bg-neutral-900 dark:border-neutral-800">
         <div className="max-w-5xl mx-auto p-3 sm:p-4">
           <div className="grid grid-cols-3 items-center">
             {/* left spacer to balance the centered logo */}
@@ -540,7 +574,7 @@ function PublicApp() {
       {/* Login Modal */}
       {loginOpen && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center">
-          <div className="w-full max-w-sm rounded-xl bg-white shadow-xl">
+          <div className="w-full max-w-sm rounded-xl bg-white dark:bg-neutral-900 shadow-xl">
             <div className="p-4 border-b flex items-center justify-between">
               <div className="font-semibold">Login</div>
               <Button onClick={() => { setLoginOpen(false); setLoginError(null); }}>Schließen</Button>
@@ -587,7 +621,7 @@ function PublicApp() {
       )}
       {registerOpen && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center">
-          <div className="w-full max-w-sm rounded-xl bg-white shadow-xl">
+          <div className="w-full max-w-sm rounded-xl bg-white dark:bg-neutral-900 shadow-xl">
             <div className="p-4 border-b flex items-center justify-between">
               <div className="font-semibold">Zugang beantragen</div>
               <Button onClick={() => setRegisterOpen(false)}>Schließen</Button>
@@ -698,7 +732,7 @@ function PublicApp() {
           <>
             {/* Kategorien-Toolbar mit Scroll und Menü */}
             <div
-              className="mb-4 -mx-4 px-4 sticky z-40 bg-white/95 backdrop-blur"
+              className="mb-4 -mx-4 px-4 sticky z-40 bg-white/95 backdrop-blur dark:bg-neutral-900/90"
               style={{ top: 0 }}
               ref={toolbarRef}
             >
@@ -763,7 +797,7 @@ function PublicApp() {
             {navOpen && (
               <div className="fixed inset-0 z-50">
                 <div className="absolute inset-0 bg-black/40" onClick={() => setNavOpen(false)} />
-                <div className="absolute left-0 right-0 top-0 mx-auto max-w-md bg-white/95 backdrop-blur rounded-b-2xl shadow-xl">
+                <div className="absolute left-0 right-0 top-0 mx-auto max-w-md bg-white/95 dark:bg-neutral-900/90 backdrop-blur rounded-b-2xl shadow-xl">
                   <div className="flex items-center justify-between p-4 border-b">
                     <div className="text-lg font-semibold">Kategorien</div>
                     <Button className="rounded-full w-10 h-10" onClick={() => setNavOpen(false)}>×</Button>
@@ -818,7 +852,7 @@ function PublicApp() {
         )}
       </main>
 
-      <footer className="text-center py-4 text-sm text-neutral-500 border-t mt-6">
+      <footer className="text-center py-4 text-sm text-neutral-500 border-t mt-6 dark:text-neutral-400 dark:border-neutral-800">
         © {new Date().getFullYear()} QR-Speisekarte Urixsoft
       </footer>
     </div>
@@ -1126,8 +1160,8 @@ function AdminApp() {
   }
 
   return (
-    <div className="min-h-screen bg-neutral-50 text-neutral-900">
-      <header ref={headerRef} className="fixed top-0 left-0 right-0 z-50 bg-white border-b">
+    <div className="min-h-screen bg-neutral-50 text-neutral-900 dark:bg-neutral-950 dark:text-neutral-100">
+      <header ref={headerRef} className="fixed top-0 left-0 right-0 z-50 bg-white border-b dark:bg-neutral-900 dark:border-neutral-800">
         <div className="max-w-5xl mx-auto w-full p-3 sm:p-4">
           {/* Mobile: zentriertes Logo + Hamburger rechts */}
           <div className="sm:hidden grid grid-cols-3 items-center">
@@ -1205,7 +1239,7 @@ function AdminApp() {
         {mobileMenuOpen && (
           <div className="sm:hidden fixed inset-0 z-50">
             <div className="absolute inset-0 bg-black/40" onClick={() => setMobileMenuOpen(false)} />
-            <div className="absolute left-0 right-0 top-0 mx-auto max-w-md bg-white/95 backdrop-blur rounded-b-2xl shadow-xl">
+            <div className="absolute left-0 right-0 top-0 mx-auto max-w-md bg-white/95 dark:bg-neutral-900/90 backdrop-blur rounded-b-2xl shadow-xl">
               <div className="flex items-center justify-between p-4 border-b">
                 <div className="text-lg font-semibold">Menü</div>
                 <Button className="rounded-full w-10 h-10" onClick={() => setMobileMenuOpen(false)}>×</Button>
@@ -1286,7 +1320,7 @@ function AdminApp() {
           <>
             {/* Kategorien-Toolbar (Admin) */}
             <div
-              className="mb-4 -mx-4 px-4 sticky z-40 bg-white/95 backdrop-blur"
+              className="mb-4 -mx-4 px-4 sticky z-40 bg-white/95 backdrop-blur dark:bg-neutral-900/90"
               style={{ top: headerH }}
               ref={toolbarRef}
             >
@@ -1350,7 +1384,7 @@ function AdminApp() {
             {navOpen && (
               <div className="fixed inset-0 z-50">
                 <div className="absolute inset-0 bg-black/40" onClick={() => setNavOpen(false)} />
-                <div className="absolute left-0 right-0 top-0 mx-auto max-w-md bg-white/95 backdrop-blur rounded-b-2xl shadow-xl">
+                <div className="absolute left-0 right-0 top-0 mx-auto max-w-md bg-white/95 dark:bg-neutral-900/90 backdrop-blur rounded-b-2xl shadow-xl">
                   <div className="flex items-center justify-between p-4 border-b">
                     <div className="text-lg font-semibold">Kategorien</div>
                     <Button className="rounded-full w-10 h-10" onClick={() => setNavOpen(false)}>×</Button>
@@ -1456,14 +1490,14 @@ function AdminApp() {
         )}
       </main>
 
-      <footer className="text-center py-4 text-sm text-neutral-500 border-t mt-6">
+      <footer className="text-center py-4 text-sm text-neutral-500 border-t mt-6 dark:text-neutral-400 dark:border-neutral-800">
         © {new Date().getFullYear()} QR-Speisekarte Urixsoft
       </footer>
 
       {/* Benutzerverwaltung modal */}
       {isSuperAdmin && usersOpen && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center">
-          <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
+          <div className="w-full max-w-md rounded-xl bg-white dark:bg-neutral-900 shadow-xl">
             <div className="p-4 border-b flex items-center justify-between">
               <div className="font-semibold">Benutzerverwaltung</div>
               <Button onClick={() => setUsersOpen(false)}>Schließen</Button>
@@ -1505,7 +1539,7 @@ function AdminApp() {
       {/* Anträge modal */}
       {isSuperAdmin && pendingOpen && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center">
-          <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
+          <div className="w-full max-w-md rounded-xl bg-white dark:bg-neutral-900 shadow-xl">
             <div className="p-4 border-b flex items-center justify-between">
               <div className="font-semibold">Ausstehende Zugänge</div>
               <Button onClick={() => setPendingOpen(false)}>Schließen</Button>
@@ -1584,7 +1618,7 @@ function AdminApp() {
       {/* Passwort ändern Modal */}
       {isSuperAdmin && passwordModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center">
-          <div className="w-full max-w-sm rounded-xl bg-white shadow-xl p-5">
+          <div className="w-full max-w-sm rounded-xl bg-white dark:bg-neutral-900 shadow-xl p-5">
             <div className="font-semibold text-lg mb-3">Passwort ändern</div>
             <label className="text-sm block mb-2">
               Neues Passwort
@@ -1709,6 +1743,8 @@ export default function App() {
     if (typeof window === "undefined") return "/";
     return window.location.hash?.slice(1) || "/";
   });
+
+  useSystemThemeSync();
 
   React.useEffect(() => {
     const onHash = () => setRoute(window.location.hash?.slice(1) || "/");
