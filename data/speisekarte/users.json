@@ -1,9 +1,10 @@
 {
   "allowed": [
-    "admin"
+    "admin",
+    "a"
   ],
-  "pending": {},
   "passwords": {
-    "admin": "$2b$10$KXRGpH3pG5IT8qBHxpPBqOgNPkiQl9austqxKCjK4DlY3WIa.Orhy"
+    "admin": "$2b$10$KXRGpH3pG5IT8qBHxpPBqOgNPkiQl9austqxKCjK4DlY3WIa.Orhy",
+    "a": "$2b$10$ZrbUWe2t4LAkrU7HZadhrejjWNIGhiYIz8b/XiGKgyQdRA/xeSHhG"
   }
 }
