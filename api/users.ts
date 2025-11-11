@@ -13,6 +13,12 @@ const GH_BRANCH = process.env.GITHUB_BRANCH || "main";
 const GH_TOKEN  = process.env.GITHUB_TOKEN || "";
 const ADMIN_SECRET = process.env.ADMIN_SECRET || process.env.VITE_ADMIN_SECRET || "";
 
+const CORS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET,OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type,x-admin-secret",
+};
+
 // base64 decode (Edge-safe)
 const b64dec = (b: string) => {
   try { return decodeURIComponent(escape(atob(b))); } catch { return atob(b); }
@@ -24,6 +30,7 @@ const jsonRes = (status: number, body: unknown) =>
     headers: {
       "content-type": "application/json; charset=utf-8",
       "cache-control": "no-store",
+      ...CORS,
     },
   });
 
@@ -47,6 +54,9 @@ async function gh<T>(path: string): Promise<{ ok: true; data: T } | { ok: false;
 }
 
 export default async function handler(req: Request) {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { status: 200, headers: CORS });
+  }
   try {
     const url = new URL(req.url);
     const tenant = sanitizeTenant(url.searchParams.get("tenant") || undefined);
@@ -71,6 +81,8 @@ export default async function handler(req: Request) {
           } else if (parsed && typeof parsed === "object") {
             allowed = Array.isArray(parsed.allowed) && parsed.allowed.length ? parsed.allowed : ["admin"];
           }
+          // Ensure 'admin' is always present and remove duplicates
+          allowed = Array.from(new Set([...(allowed || []), "admin"]));
         } catch {
           // fallback auf defaults
         }

@@ -1,5 +1,4 @@
-// api/users-login.ts
-// Verify username + password against hashed passwords stored in GitHub (data/<tenant>/users.json)
+// Verify username + password against hashed passwords stored in GitHub (data/<tenant>/passwords.json)
 
 export const config = { runtime: 'nodejs' } as const;
 
@@ -61,9 +60,8 @@ async function ghReadJson<T>(repoPath: string, fallback: T): Promise<{ data: T; 
 // ---------- Types ----------
 interface UsersJson {
   allowed?: string[];
-  pending?: Record<string,string>;
-  passwords?: Record<string,string>; // bcrypt hashes by username
 }
+type PasswordsJson = Record<string, string>;
 
 // ---------- Handler ----------
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
@@ -87,12 +85,13 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       return json(res, 400, { ok: false, error: 'missing-credentials' });
     }
 
-    // Load users.json
+    // Load users.json and passwords.json (hashes are kept outside of users.json)
     const usersPath = `data/${tenant}/users.json`;
-    const { data: users } = await ghReadJson<UsersJson>(usersPath, { allowed: ['admin'], pending: {}, passwords: {} });
+    const pwPath    = `data/${tenant}/passwords.json`;
+    const { data: users } = await ghReadJson<UsersJson>(usersPath, { allowed: ['admin'] });
+    const { data: pwMap }  = await ghReadJson<PasswordsJson>(pwPath, {});
 
     const allowed = Array.isArray(users.allowed) ? users.allowed : ['admin'];
-    const pwMap   = (users.passwords && typeof users.passwords === 'object') ? users.passwords : {};
 
     if (!allowed.includes(username)) {
       // not approved user

@@ -9,6 +9,8 @@ type UsersFile = {
   // you might extend later with { pending: Record<string,string> } etc.
 };
 
+type PasswordsFile = Record<string, string>;
+
 function json(res: any, status: number, data: any) {
   res.statusCode = status;
   res.setHeader("Content-Type", "application/json; charset=utf-8");
@@ -102,12 +104,46 @@ async function readUsers(path: string): Promise<{ file: UsersFile; sha?: string 
   return { file: parsed, sha: r.data.sha };
 }
 
+async function readPasswords(path: string): Promise<{ map: PasswordsFile; sha?: string }> {
+  const { owner, repo } = getGitHubEnv();
+  const r = await gh(`/repos/${owner}/${repo}/contents/${encodeURIComponent(path)}`);
+  if (!r.ok) {
+    if (r.status === 404) return { map: {} };
+    const err: any = new Error("GitHub read failed");
+    err.status = 502;
+    err.detail = r.data;
+    throw err;
+  }
+  const content = Buffer.from(r.data.content || "", r.data.encoding || "base64").toString("utf8");
+  const parsed: PasswordsFile = JSON.parse(content || "{}");
+  return { map: parsed, sha: r.data.sha };
+}
+
 async function writeUsers(path: string, next: UsersFile, sha?: string, message = "Delete user") {
   const { owner, repo } = getGitHubEnv();
   const body = {
     message,
     content: Buffer.from(JSON.stringify(next, null, 2), "utf8").toString("base64"),
     sha, // required when overwriting
+  };
+  const r = await gh(`/repos/${owner}/${repo}/contents/${encodeURIComponent(path)}`, {
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) {
+    const err: any = new Error("GitHub write failed");
+    err.status = 502;
+    err.detail = r.data;
+    throw err;
+  }
+}
+
+async function writePasswords(path: string, next: PasswordsFile, sha?: string, message = "Update passwords") {
+  const { owner, repo } = getGitHubEnv();
+  const body = {
+    message,
+    content: Buffer.from(JSON.stringify(next, null, 2), "utf8").toString("base64"),
+    sha,
   };
   const r = await gh(`/repos/${owner}/${repo}/contents/${encodeURIComponent(path)}`, {
     method: "PUT",
@@ -139,6 +175,7 @@ export default async function handler(req: any, res: any) {
     if (username === "admin") return json(res, 400, { ok: false, error: "Cannot delete admin" });
 
     const usersPath = `data/${tenant}/users.json`;
+    const passwordsPath = `data/${tenant}/passwords.json`;
 
     // Read current
     const { file, sha } = await readUsers(usersPath);
@@ -154,7 +191,22 @@ export default async function handler(req: any, res: any) {
     // Write back
     await writeUsers(usersPath, next, sha, `Delete user ${username}`);
 
-    return json(res, 200, { ok: true, allowed });
+    let pwdRemoved = false;
+    try {
+      const { map: pwdMap, sha: pwdSha } = await readPasswords(passwordsPath);
+      if (username in pwdMap) {
+        delete pwdMap[username];
+        pwdRemoved = true;
+        await writePasswords(passwordsPath, pwdMap, pwdSha, `Remove password for ${username}`);
+      }
+    } catch (pwErr) {
+      // Do not fail the whole delete if password file is missing or invalid; include detail in non-prod
+      if (process.env.NODE_ENV !== "production") {
+        console.warn("[users-delete] password cleanup warning", pwErr);
+      }
+    }
+
+    return json(res, 200, { ok: true, allowed, passwordRemoved: pwdRemoved });
   } catch (e: any) {
     const status = e?.status || 500;
     const payload: any = { ok: false, error: e?.message || "Server error" };

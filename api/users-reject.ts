@@ -9,6 +9,7 @@ import { Buffer } from "node:buffer";
 
 type PendingMap = Record<string, string>;
 type GitHubFile = { content: string; sha: string; encoding: string };
+type PasswordsMap = Record<string, string>;
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -89,6 +90,16 @@ async function readPending(path: string): Promise<{ data: PendingMap; sha: strin
   }
 }
 
+async function readPasswords(path: string): Promise<{ data: PasswordsMap; sha: string | null }> {
+  try {
+    const f = await ghGetFile(path);
+    const buf = Buffer.from(f.content, f.encoding as BufferEncoding);
+    return { data: JSON.parse(buf.toString("utf8")), sha: f.sha };
+  } catch {
+    return { data: {}, sha: null };
+  }
+}
+
 /* ----------------------------------------------------
  * ✅ NOW THE NEW NODE-RUNTIME HANDLER
  * ---------------------------------------------------- */
@@ -132,6 +143,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     if (!username) return err(res, 400, "username-required");
 
     const pendingPath = `data/${tenant}/pending.json`;
+    const passwordsPath = `data/${tenant}/passwords.json`;
 
     const { data: pending, sha } = await readPending(pendingPath);
 
@@ -146,7 +158,26 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       `reject pending user ${username} (tenant: ${tenant})`
     );
 
-    return ok(res, { tenant, username, changed: true });
+    // Additionally: cleanup any stored password for this (never-approved) user
+    let passwordRemoved = false;
+    try {
+      const { data: pwMap, sha: pwSha } = await readPasswords(passwordsPath);
+      if (username in pwMap) {
+        delete pwMap[username];
+        await ghPutJson(
+          passwordsPath,
+          pwMap,
+          pwSha,
+          `remove password for rejected user ${username} (tenant: ${tenant})`
+        );
+        passwordRemoved = true;
+      }
+    } catch (pwErr) {
+      // non-fatal; log for diagnostics
+      console.warn("[users-reject] password cleanup warning:", pwErr instanceof Error ? pwErr.message : pwErr);
+    }
+
+    return ok(res, { tenant, username, changed: true, passwordRemoved });
   } catch (e: any) {
     console.error("[users-reject] CRASH", e);
     return err(res, 500, "handler-crash", String(e?.message || e));

@@ -1,6 +1,6 @@
 // api/users-register.ts
 // Node runtime registration endpoint (no fs/path on edge)
-// Persists to GitHub repo: data/<tenant>/{users.json,pending.json}
+// Persists to GitHub repo: data/<tenant>/{users.json,pending.json,passwords.json}
 
 import type { IncomingMessage, ServerResponse } from 'http';
 import { Buffer } from 'node:buffer';
@@ -78,6 +78,7 @@ function b64decode(b64: string) { try { return Buffer.from(b64, 'base64').toStri
 type UsersJsonObj = { allowed: string[]; passwords?: Record<string,string> };
 type PendingJson = Record<string,string>;
 type GitHubFile = { content?: string; sha?: string; encoding?: string };
+ type PasswordsJson = Record<string, string>;
 
 async function ghReadJson<T>(repoPath: string, fallback: T): Promise<{ data: T; sha: string | null }> {
   const url = ghUrl(repoPath);
@@ -154,6 +155,8 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
 
     const usersPath   = `data/${tenant}/users.json`;
     const pendingPath = `data/${tenant}/pending.json`;
+    // NEW: ensure a dedicated passwords store exists (we keep hashes out of users.json)
+    const passwordsPath = `data/${tenant}/passwords.json`;
 
     // users.json tolerant lesen (Array oder Objekt)
     const { data: rawUsers, sha: usersSha } = await ghReadJson<any>(usersPath, { allowed: ['admin'], passwords: {} });
@@ -169,6 +172,12 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     }
 
     const { data: pendingData, sha: pendingSha } = await ghReadJson<PendingJson>(pendingPath, {});
+
+    // Ensure passwords.json exists so later approve flow can move the hash there
+    const { sha: passwordsSha } = await ghReadJson<PasswordsJson>(passwordsPath, {});
+    if (passwordsSha === null) {
+      await ghWriteJson(passwordsPath, {}, `chore(api): init passwords.json for ${tenant}`, null);
+    }
 
     if (usersData.allowed.includes(username)) {
       return json(res, 409, { ok: false, error: 'exists' }); // <— FIX: 409

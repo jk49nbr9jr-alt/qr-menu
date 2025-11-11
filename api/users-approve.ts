@@ -4,7 +4,7 @@ export const config = { runtime: "nodejs" } as const;
  * Approve a pending user:
  * - moves from data/<tenant>/pending.json to data/<tenant>/users.json
  * - adds username to allowed[]
- * - stores the pending password under passwords[username]
+ * - writes the (hashed) password to data/<tenant>/passwords.json (not into users.json)
  * - if the pending value is plaintext it will be hashed with bcryptjs before being stored
  * Body: { tenant?: string, username: string }
  * Requires x-admin-secret.
@@ -12,6 +12,7 @@ export const config = { runtime: "nodejs" } as const;
 
 type GitHubFile = { content: string; sha: string; encoding: "base64" | string };
 type UsersJson   = { allowed?: string[]; passwords?: Record<string, string> };
+type PasswordsJson = Record<string, string>;
 type PendingJson = Record<string, string>;
 
 const CORS = {
@@ -203,10 +204,12 @@ export default async function handler(req: any) {
 
   const usersPath   = `data/${tenant}/users.json`;
   const pendingPath = `data/${tenant}/pending.json`;
+  const passwordsPath = `data/${tenant}/passwords.json`;
 
   // read both files
-  const { data: users,   sha: usersSha }   = await readJsonFromRepo<UsersJson>(usersPath, { allowed: ["admin"], passwords: {} });
+  const { data: users,   sha: usersSha }   = await readJsonFromRepo<UsersJson>(usersPath, { allowed: ["admin"] });
   const { data: pending, sha: pendingSha } = await readJsonFromRepo<PendingJson>(pendingPath, {});
+  const { data: passwords, sha: passwordsSha } = await readJsonFromRepo<PasswordsJson>(passwordsPath, {});
   const pw = pending[username];
 
   // Support both legacy plaintext pending values and new bcrypt-hashed values.
@@ -226,20 +229,21 @@ export default async function handler(req: any) {
   if (!pw) return err(404, "not-pending");
 
   // update users
-  const allowedSet = new Set<string>([..."admin".split(","), ...(users.allowed || [])]); // ensure admin
+  const allowedSet = new Set<string>([...(users.allowed || [])]);
   allowedSet.add("admin");
   allowedSet.add(username);
-  const nextUsers: UsersJson = {
-    allowed: Array.from(allowedSet),
-    passwords: { ...(users.passwords || {}), [username]: passwordToStore },
-  };
+  const nextUsers: UsersJson = { allowed: Array.from(allowedSet) };
+
+  // merge/update passwords.json (hash is in passwordToStore)
+  const nextPasswords: PasswordsJson = { ...(passwords || {}), [username]: passwordToStore };
 
   // remove from pending
   delete pending[username];
 
   try {
-    await ghPutJson(usersPath,   nextUsers, usersSha,   `approve user ${username} (tenant: ${tenant})`);
-    await ghPutJson(pendingPath, pending,   pendingSha, `remove pending ${username} (tenant: ${tenant})`);
+    await ghPutJson(usersPath,      nextUsers,      usersSha,      `approve user ${username} (tenant: ${tenant})`);
+    await ghPutJson(passwordsPath,  nextPasswords,  passwordsSha,  `set password for ${username} (tenant: ${tenant})`);
+    await ghPutJson(pendingPath,    pending,        pendingSha,    `remove pending ${username} (tenant: ${tenant})`);
     return ok({ tenant, username, approved: true });
   } catch (e: any) {
     return err(500, "approve-failed", { message: String(e?.message || e) });

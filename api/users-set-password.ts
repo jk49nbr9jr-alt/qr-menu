@@ -1,6 +1,6 @@
 // api/users-set-password.ts
-// Sets (or resets) a user's password by updating data/<tenant>/users.json
-// Stores only a bcrypt *hash* under users.passwords[username].
+// Sets (or resets) a user's password by updating data/<tenant>/passwords.json
+// Stores only a bcrypt *hash* under passwords[username] (kept separate from users.json).
 // Auth: requires x-admin-secret header to match ADMIN_SECRET/VITE_ADMIN_SECRET.
 
 export const config = { runtime: "nodejs" } as const; // bcrypt requires Node runtime
@@ -110,27 +110,22 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       return json(res, 400, { ok: false, error: "weak-password", message: vs.message, score: vs.score });
     }
 
-    // ---- read existing users file ----
-    const path = `/repos/${GH_OWNER}/${GH_REPO}/contents/data/${tenant}/users.json`;
+    // ---- read existing passwords file (separate store) ----
+    const pwPath = `/repos/${GH_OWNER}/${GH_REPO}/contents/data/${tenant}/passwords.json`;
 
-    let sha = "";
-    let users: { allowed?: string[]; pending?: Record<string, string>; passwords?: Record<string, string> } = {
-      allowed: ["admin"],
-      pending: {},
-      passwords: {},
-    };
+    let pwSha = "";
+    let pwMap: Record<string, string> = {};
 
     try {
-      const f = await gh<GHFile>(`${path}?ref=${encodeURIComponent(GH_BRANCH)}`);
+      const f = await gh<GHFile>(`${pwPath}?ref=${encodeURIComponent(GH_BRANCH)}`);
       const txt = Buffer.from(f.content, (f.encoding as BufferEncoding) || "base64").toString("utf8");
-      sha = f.sha;
-      try { users = JSON.parse(txt) || users; } catch {}
-      users.allowed ||= ["admin"]; users.pending ||= {}; users.passwords ||= {};
+      pwSha = f.sha;
+      try { pwMap = JSON.parse(txt) || {}; } catch {}
     } catch {
-      // not found -> new file will be created
+      // not found -> will create a new passwords.json on write
     }
 
-    // ---- hash password (bcrypt) ----
+    // ---- hash password (bcrypt), accept already-hashed bcrypt as-is ----
     const looksLikeBcrypt = /^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$/.test(password);
     let passwordHash = password;
     if (!looksLikeBcrypt) {
@@ -139,18 +134,18 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     }
 
     // ---- update password map ----
-    users.passwords![username] = passwordHash;
+    pwMap[username] = passwordHash;
 
     // ---- write back (base64) ----
-    const content = Buffer.from(JSON.stringify(users, null, 2) + "\n", "utf8").toString("base64");
+    const content = Buffer.from(JSON.stringify(pwMap, null, 2) + "\n", "utf8").toString("base64");
     const payload: any = {
       message: `chore(${tenant}): set password (hashed) for ${username}`,
       content,
       branch: GH_BRANCH,
     };
-    if (sha) payload.sha = sha;
+    if (pwSha) payload.sha = pwSha;
 
-    await gh(path, { method: "PUT", body: JSON.stringify(payload) });
+    await gh(pwPath, { method: "PUT", body: JSON.stringify(payload) });
 
     // Do not return the hash
     return json(res, 200, { ok: true, username, tenant /* strength: vs.score is not available here, intentionally omitted */ });
