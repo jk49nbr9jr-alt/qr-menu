@@ -52,9 +52,44 @@ const CardContent: React.FC<DivProps> = ({ className = "", children, ...rest }) 
 const Input: React.FC<InputProps> = ({ className = "", ...props }) => (
   <input className={("w-full rounded-md border border-neutral-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black/10 " + className).trim()} {...props} />
 );
+
 const TextArea: React.FC<React.TextareaHTMLAttributes<HTMLTextAreaElement>> = ({ className = "", ...props }) => (
   <textarea className={("w-full rounded-md border border-neutral-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black/10 " + className).trim()} {...props} />
 );
+
+// --- Inline Cookie Banner (no tracking, simple consent stored in localStorage) ---
+function CookieBanner() {
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const consent = localStorage.getItem("cookie-consent");
+    if (!consent) setVisible(true);
+  }, []);
+
+  if (!visible) return null;
+
+  return (
+    <div className="fixed bottom-0 left-0 right-0 z-50 bg-neutral-900 text-white p-4 shadow-lg">
+      <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center gap-3">
+        <p className="text-sm leading-snug text-center sm:text-left">
+          🍪 Wir verwenden nur technisch notwendige Cookies, um diese Seite funktionsfähig zu machen.
+          Es werden keine Tracking-Daten gespeichert.
+        </p>
+        <div className="flex items-center gap-2">
+          <button
+            className="rounded-full bg-green-600 hover:bg-green-700 px-5 py-2 text-sm font-semibold"
+            onClick={() => {
+              localStorage.setItem("cookie-consent", "true");
+              setVisible(false);
+            }}
+          >
+            Verstanden
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /* ---------- Daten & Typen ---------- */
 type MenuItem = {
@@ -1681,6 +1716,12 @@ export default function App() {
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
 
-  if (route.startsWith("/admin")) return <AdminApp />;
-  return <PublicApp />;
+  const content = route.startsWith("/admin") ? <AdminApp /> : <PublicApp />;
+
+  return (
+    <>
+      {content}
+      <CookieBanner />
+    </>
+  );
 }
