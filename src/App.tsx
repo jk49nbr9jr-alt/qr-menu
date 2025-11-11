@@ -785,8 +785,8 @@ function PublicApp() {
                       className={
                         "shrink-0 rounded-full px-5 py-2 text-sm bg-transparent transition " +
                         (cat === c
-                          ? "border-2 border-amber-500 text-amber-700 font-semibold"
-                          : "border-2 border-transparent text-neutral-600 hover:text-neutral-800")
+                          ? "border-2 border-amber-500 text-amber-500 font-semibold"
+                          : "border-2 border-transparent text-neutral-400 hover:text-amber-400 dark:hover:text-amber-300 transition-colors")
                       }
                     >
                       {c}
@@ -1377,8 +1377,8 @@ function AdminApp() {
                       className={
                         "shrink-0 rounded-full px-5 py-2 text-sm bg-transparent transition " +
                         (cat === c
-                          ? "border-2 border-amber-500 text-amber-700 font-semibold"
-                          : "border-2 border-transparent text-neutral-600 hover:text-neutral-800")
+                          ? "border-2 border-amber-500 text-amber-500 font-semibold"
+                          : "border-2 border-transparent text-neutral-400 hover:text-amber-400 dark:hover:text-amber-300 transition-colors")
                       }
                     >
                       {c}
