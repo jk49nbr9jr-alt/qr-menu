@@ -747,7 +747,7 @@ function PublicApp() {
                 </button>
                 {/* Hamburger zum Öffnen der Liste */}
                 <button
-                  aria-label="Kategorien"
+                  aria-label="Menü"
                   className="inline-flex items-center justify-center rounded-full w-10 h-10 border border-neutral-300 text-neutral-500 bg-transparent hover:text-neutral-700 hover:border-neutral-400"
                   onClick={() => setNavOpen(true)}
                 >
@@ -799,7 +799,7 @@ function PublicApp() {
                 <div className="absolute inset-0 bg-black/40" onClick={() => setNavOpen(false)} />
                 <div className="absolute left-0 right-0 top-0 mx-auto max-w-md bg-white/95 dark:bg-neutral-900/90 backdrop-blur rounded-b-2xl shadow-xl">
                   <div className="flex items-center justify-between p-4 border-b">
-                    <div className="text-lg font-semibold">Kategorien</div>
+                    <div className="text-lg font-semibold">Menü</div>
                     <Button className="rounded-full w-10 h-10" onClick={() => setNavOpen(false)}>×</Button>
                   </div>
                   <div className="p-2 max-h-[70vh] overflow-auto">
@@ -807,8 +807,8 @@ function PublicApp() {
                       <button
                         key={c}
                         className={
-                          "w-full text-left px-4 py-3 border-b hover:bg-neutral-50 " +
-                          (cat === c ? "bg-neutral-100 font-semibold" : "")
+                          "w-full text-left px-4 py-3 border-b hover:bg-neutral-50 dark:border-neutral-800 dark:hover:bg-neutral-800 " +
+                          (cat === c ? "bg-neutral-100 dark:bg-neutral-800 font-semibold" : "")
                         }
                         onClick={() => { setCat(c); setFilterOn(false); scrollToCategory(c); setNavOpen(false); }}
                       >
@@ -1335,7 +1335,7 @@ function AdminApp() {
                 </button>
                 {/* Hamburger */}
                 <button
-                  aria-label="Kategorien"
+                  aria-label="Menü"
                   className="inline-flex items-center justify-center rounded-full w-10 h-10 border border-neutral-300 text-neutral-500 bg-transparent hover:text-neutral-700 hover:border-neutral-400"
                   onClick={() => setNavOpen(true)}
                 >
@@ -1386,7 +1386,7 @@ function AdminApp() {
                 <div className="absolute inset-0 bg-black/40" onClick={() => setNavOpen(false)} />
                 <div className="absolute left-0 right-0 top-0 mx-auto max-w-md bg-white/95 dark:bg-neutral-900/90 backdrop-blur rounded-b-2xl shadow-xl">
                   <div className="flex items-center justify-between p-4 border-b">
-                    <div className="text-lg font-semibold">Kategorien</div>
+                    <div className="text-lg font-semibold">Menü</div>
                     <Button className="rounded-full w-10 h-10" onClick={() => setNavOpen(false)}>×</Button>
                   </div>
                   <div className="p-2 max-h-[70vh] overflow-auto">
@@ -1419,8 +1419,8 @@ function AdminApp() {
                           setDragOverCat(null);
                         }}
                         className={
-                          "w-full px-4 py-3 border-b flex items-center justify-between cursor-grab active:cursor-grabbing " +
-                          (cat === c ? "bg-neutral-100 " : "hover:bg-neutral-50 ") +
+                          "w-full px-4 py-3 border-b flex items-center justify-between cursor-grab active:cursor-grabbing dark:border-neutral-800 " +
+                          (cat === c ? "bg-neutral-100 dark:bg-neutral-800 " : "hover:bg-neutral-50 dark:hover:bg-neutral-800 ") +
                           (dragOverCat === c ? "ring-2 ring-amber-400 ring-offset-0" : "")
                         }
                         title="Zum Verschieben ziehen"
